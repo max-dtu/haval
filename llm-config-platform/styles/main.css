@@ -132,6 +132,45 @@ body {
 	color: var(--danger);
 }
 
+.model-picker--json .model-picker__description {
+	font-size: 0.95rem;
+	line-height: 1.4;
+}
+
+.model-picker__textarea {
+	width: 100%;
+	box-sizing: border-box;
+	border: 1px solid var(--line);
+	border-radius: 12px;
+	padding: 0.85rem;
+	font-family: "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+	font-size: 0.88rem;
+	line-height: 1.45;
+	background: #fbfcff;
+	color: var(--ink);
+	resize: vertical;
+	min-height: 240px;
+}
+
+.model-picker__textarea:focus {
+	outline: 2px solid rgba(45, 108, 223, 0.2);
+	border-color: var(--accent);
+}
+
+.model-picker__status {
+	margin-top: 0.75rem;
+	padding: 0.6rem 0.75rem;
+	border-radius: 8px;
+	background: #edf3ff;
+	color: #19408a;
+	font-size: 0.9rem;
+}
+
+.model-picker__status--error {
+	background: #fef3f2;
+	color: var(--danger);
+}
+
 @media (max-width: 640px) {
 	.model-picker {
 		margin: 1rem;

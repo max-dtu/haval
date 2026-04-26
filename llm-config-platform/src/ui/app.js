@@ -1,29 +1,57 @@
-import { createRunner } from "../core/runner.js";
+import { buildUnifiedRequest } from "../core/unifiedRequest.js";
 import { registry } from "../core/registry.js";
 import { providerPlugins } from "../schema/capabilities.js";
 import { clearNode, createElement } from "../utils/dom.js";
-import { normalizeByField } from "../utils/normalize.js";
-import { renderPanel } from "./renderPanel.js";
-import { renderPreview } from "./preview.js";
-import { renderTabs } from "./renderTabs.js";
-import { createState } from "./state.js";
 
 registry.registerMany(providerPlugins);
 
-function extractFormValues(form) {
-	const values = {};
-	form.querySelectorAll("[data-key]").forEach((input) => {
-		const key = input.dataset.key;
-		const fieldType = input.dataset.fieldType;
-		const pseudoField = {
-			type: fieldType,
-			default: fieldType === "boolean" ? false : "",
-		};
+function getInitialPayload() {
+	return {
+		provider: "webllm",
+		config: {
+			model: "Llama-3-8B-Instruct-q4f32_1",
+			temperature: 0.7,
+			max_tokens: 512,
+			top_p: 0.9,
+			stream: true,
+		},
+	};
+}
 
-		const rawValue = input.type === "checkbox" ? input.checked : input.value;
-		values[key] = normalizeByField(pseudoField, rawValue);
-	});
-	return values;
+function validatePayload(rawText) {
+	let parsed;
+
+	try {
+		parsed = JSON.parse(rawText);
+	} catch (error) {
+		return {
+			ok: false,
+			errors: [`Invalid JSON: ${error.message}`],
+		};
+	}
+
+	if (!parsed || typeof parsed !== "object") {
+		return {
+			ok: false,
+			errors: ["Input must be a JSON object"],
+		};
+	}
+
+	if (!parsed.provider || typeof parsed.provider !== "string") {
+		return {
+			ok: false,
+			errors: ["provider is required and must be a string"],
+		};
+	}
+
+	if (!parsed.config || typeof parsed.config !== "object") {
+		return {
+			ok: false,
+			errors: ["config is required and must be an object"],
+		};
+	}
+
+	return buildUnifiedRequest(parsed.provider, parsed.config);
 }
 
 export function mountModelPicker(target) {
@@ -32,73 +60,68 @@ export function mountModelPicker(target) {
 		throw new Error("mountModelPicker target not found");
 	}
 
-	const providers = registry.list();
-	const runner = createRunner();
-	const state = createState({ provider: providers[0]?.id });
+	const providers = registry.list().map((plugin) => plugin.id).join(", ");
 
-	const form = createElement("form", { className: "model-picker" });
+	const form = createElement("form", { className: "model-picker model-picker--json" });
 	const fieldset = createElement("fieldset", { className: "model-picker__fieldset" });
-	const legend = createElement("legend", { className: "model-picker__legend", text: "Choose model source" });
-	const panel = createElement("section", { attrs: { id: "panel" }, className: "model-picker__panel" });
-	const previewRoot = createElement("section", { className: "model-picker__preview-root" });
-	const submit = createElement("button", { attrs: { type: "submit" }, text: "Submit" });
+	const legend = createElement("legend", {
+		className: "model-picker__legend",
+		text: "JSON Config Input",
+	});
+	const helper = createElement("p", {
+		className: "model-picker__description",
+		text: `Set provider and config in JSON. Available providers: ${providers}`,
+	});
+	const textarea = createElement("textarea", {
+		className: "model-picker__textarea",
+		attrs: {
+			rows: 16,
+			spellcheck: "false",
+			"aria-label": "Model JSON config",
+		},
+	});
+	const status = createElement("div", {
+		className: "model-picker__status",
+		attrs: {
+			role: "status",
+			"aria-live": "polite",
+		},
+	});
+	const preview = createElement("pre", { className: "model-picker__preview" });
+	const submit = createElement("button", { attrs: { type: "submit" }, text: "Validate & Build" });
 
-	fieldset.append(legend);
+	textarea.value = JSON.stringify(getInitialPayload(), null, 2);
+
+	fieldset.append(legend, helper, textarea, status, preview, submit);
 	form.append(fieldset);
 	clearNode(container);
 	container.appendChild(form);
 
-	function rerender() {
-		const current = state.getState();
-		const provider = registry.get(current.provider);
+	function updateFeedback(isStrictSubmit = false) {
+		const result = validatePayload(textarea.value);
 
-		clearNode(fieldset);
-		fieldset.append(legend);
+		if (!result.ok) {
+			status.textContent = `Invalid input: ${result.errors.join("; ")}`;
+			status.classList.add("model-picker__status--error");
+			preview.textContent = "";
+			return;
+		}
 
-		renderTabs({
-			root: fieldset,
-			providers,
-			activeProvider: current.provider,
-			onSelect: (providerId) => {
-				state.setState({ provider: providerId, values: {}, errors: [] });
-			},
-		});
-
-		renderPanel({ root: panel, provider, values: current.values });
-		fieldset.append(panel, previewRoot, submit);
-
-		const result = runner.run(current.provider, current.values);
-		state.setState({
-			result: result.ok ? result : null,
-			errors: result.ok ? [] : result.errors,
-		});
+		status.textContent = isStrictSubmit
+			? "Valid input. Unified request built successfully."
+			: "JSON is valid.";
+		status.classList.remove("model-picker__status--error");
+		preview.textContent = JSON.stringify(result, null, 2);
 	}
 
-	state.subscribe((nextState) => {
-		renderPreview({
-			root: previewRoot,
-			result: nextState.result || { provider: nextState.provider, ...nextState.values },
-			errors: nextState.errors,
-		});
-	});
-
-	form.addEventListener("input", () => {
-		state.setState({ values: extractFormValues(form) });
-	});
+	textarea.addEventListener("input", () => updateFeedback(false));
 
 	form.addEventListener("submit", (event) => {
 		event.preventDefault();
-		const current = state.getState();
-		const result = runner.run(current.provider, current.values);
-		state.setState({ result: result.ok ? result : null, errors: result.ok ? [] : result.errors });
-
-		if (result.ok) {
-			console.log("FINAL CONFIG", result);
-		}
+		updateFeedback(true);
 	});
 
-	rerender();
-	state.setState({ values: extractFormValues(form) });
+	updateFeedback(false);
 }
 
 if (document.querySelector("#model-picker-root")) {
