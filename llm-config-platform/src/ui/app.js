@@ -18,6 +18,84 @@ function getInitialPayload() {
 	};
 }
 
+function getProviderExamples() {
+	return [
+		{
+			provider: "webllm",
+			config: {
+				model: "Llama-3-8B-Instruct-q4f32_1",
+				temperature: 0.7,
+				max_tokens: 512,
+				top_p: 0.9,
+				stream: true,
+			},
+		},
+		{
+			provider: "ollama",
+			config: {
+				endpoint: "http://localhost:11434",
+				model: "llama3",
+				temperature: 0.7,
+				num_predict: 512,
+				top_p: 0.9,
+				top_k: 40,
+				stream: true,
+			},
+		},
+		{
+			provider: "remote",
+			config: {
+				api_url: "https://api.example.com/v1/chat/completions",
+				api_key: "YOUR_API_KEY",
+				model: "gpt-4o-mini",
+				temperature: 0.7,
+				max_tokens: 1024,
+				top_p: 0.9,
+				stream: true,
+			},
+		},
+		{
+			provider: "openai",
+			config: {
+				api_url: "https://api.openai.com/v1/chat/completions",
+				api_key: "YOUR_OPENAI_API_KEY",
+				model: "gpt-4o-mini",
+				temperature: 0.7,
+				max_tokens: 1024,
+				top_p: 0.9,
+				stream: true,
+			},
+		},
+		{
+			provider: "anthropic",
+			config: {
+				api_key: "YOUR_ANTHROPIC_API_KEY",
+				model: "claude-3-5-sonnet-latest",
+				max_tokens: 1024,
+				temperature: 0.7,
+			},
+		},
+		{
+			provider: "huggingface",
+			config: {
+				endpoint: "https://api-inference.huggingface.co/models/meta-llama/Llama-3.1-8B-Instruct",
+				api_key: "YOUR_HF_API_KEY",
+				max_new_tokens: 512,
+				temperature: 0.7,
+			},
+		},
+		{
+			provider: "vllm",
+			config: {
+				api_url: "http://localhost:8000/v1/chat/completions",
+				model: "meta-llama/Meta-Llama-3-8B-Instruct",
+				temperature: 0.7,
+				max_tokens: 1024,
+			},
+		},
+	];
+}
+
 function validatePayload(rawText) {
 	let parsed;
 
@@ -72,6 +150,14 @@ export function mountModelPicker(target) {
 		className: "model-picker__description",
 		text: `Set provider and config in JSON. Available providers: ${providers}`,
 	});
+	const examplesTitle = createElement("p", {
+		className: "model-picker__description",
+		text: "Examples (copy one and edit values):",
+	});
+	const examples = createElement("pre", {
+		className: "model-picker__preview",
+		text: getProviderExamples().map((example) => JSON.stringify(example, null, 2)).join("\n\n"),
+	});
 	const textarea = createElement("textarea", {
 		className: "model-picker__textarea",
 		attrs: {
@@ -92,7 +178,7 @@ export function mountModelPicker(target) {
 
 	textarea.value = JSON.stringify(getInitialPayload(), null, 2);
 
-	fieldset.append(legend, helper, textarea, status, preview, submit);
+	fieldset.append(legend, helper, examplesTitle, examples, textarea, status, preview, submit);
 	form.append(fieldset);
 	clearNode(container);
 	container.appendChild(form);
