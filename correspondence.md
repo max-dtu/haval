@@ -45,3 +45,5 @@ Noted the tech stack: Vanilla HTML/CSS/JS for the frontend, Go for backend if ne
 | 5 | `haval/mvp.md` | Updated | Added tech stack table, status, features and milestones sections | `chore: add tech stack to mvp.md` |
 | 6 | `haval/correspondence.md` | Updated | Added fourth correspondence entry and project changes rows | `chore: update correspondence log` |
 | 7 | `haval/correspondence.md` | Updated | Added Checkpoint column to Project Changes table | `chore: add checkpoint col to changes table` |
+| 8 | `haval/.gitignore` | Updated | Added macOS, editor, Go, and env defaults | `chore: init .gitignore with sensible defaults` |
+| 9 | `haval/correspondence.md` | Updated | Logged .gitignore update to project changes table | `chore: update correspondence log` |
