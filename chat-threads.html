@@ -32,7 +32,12 @@
             #tab-webllm:checked ~ [role="tablist"] label[for="tab-webllm"],
             #tab-ollama:checked ~ [role="tablist"] label[for="tab-ollama"],
             #tab-remote:checked ~ [role="tablist"] label[for="tab-remote"] {
-                font-weight: bold;
+                border-bottom: 2px solid black;
+            }
+
+            [role="tablist"] {
+                display: flex;
+                gap: 20px;
             }
         </style>
     </head>
