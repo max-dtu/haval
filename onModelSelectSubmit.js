@@ -1,30 +1,38 @@
-// schema → generate UI → apply defaults → apply capability rules → validate → extract → preview
+// schema → generate UI → apply defaults → apply capability rules → validate → extract → live preview + submit
 
-const PROVIDERS = {
+const SCHEMA = {
   webllm: {
+    label: "WebLLM (Browser)",
+    description: "Runs fully in browser using WebGPU.",
     capabilities: {
-      top_k: true,
       repeat_penalty: false,
       presence_penalty: false,
     },
     fields: [
-      { key: "model", type: "text", default: "llama3" },
+      { key: "model", type: "text", placeholder: "llama3", default: "llama3" },
       { key: "temperature", type: "number", min: 0, max: 2, default: 0.7 },
       { key: "max_tokens", type: "number", default: 512 },
-      { key: "top_p", type: "number", default: 0.9 },
+      {
+        key: "top_p",
+        type: "number",
+        step: 0.05,
+        min: 0,
+        max: 1,
+        default: 0.9,
+      },
       { key: "top_k", type: "number", default: 40 },
-      { key: "seed", type: "number" },
+      { key: "seed", type: "number", default: null },
       { key: "context_window", type: "number", default: 4096 },
     ],
   },
 
   ollama: {
-    capabilities: {
-      presence_penalty: false,
-    },
+    label: "Ollama (Local)",
+    description: "Connects to local Ollama server.",
+    capabilities: {},
     fields: [
       { key: "endpoint", type: "text", default: "http://localhost:11434" },
-      { key: "model", type: "text" },
+      { key: "model", type: "text", default: "llama3" },
       { key: "temperature", type: "number", default: 0.7 },
       { key: "num_predict", type: "number", default: 512 },
       { key: "top_k", type: "number", default: 40 },
@@ -37,6 +45,8 @@ const PROVIDERS = {
   },
 
   remote: {
+    label: "Remote API",
+    description: "External LLM API (OpenAI-compatible).",
     capabilities: {},
     fields: [
       { key: "api_url", type: "text" },
@@ -53,141 +63,120 @@ const PROVIDERS = {
   },
 };
 
-function generateForm(providerKey, container) {
-  const provider = PROVIDERS[providerKey];
+function createField(field) {
+  const wrapper = document.createElement("label");
+  wrapper.className = "field";
 
-  container.innerHTML = "";
+  const label = document.createElement("div");
+  label.textContent = field.key;
 
-  provider.fields.forEach((field) => {
-    const wrapper = document.createElement("label");
-    wrapper.className = "model-picker__label";
+  const input = document.createElement("input");
 
-    const input = document.createElement("input");
-    input.name = field.key;
-    input.dataset.key = field.key;
+  input.dataset.key = field.key;
+  input.type = field.type === "boolean" ? "checkbox" : field.type;
 
-    input.className = "model-picker__input";
-    input.type = field.type === "boolean" ? "checkbox" : field.type;
+  if (field.type === "boolean") {
+    input.checked = field.default ?? false;
+  } else {
+    input.value = field.default ?? "";
+  }
 
-    if (field.default !== undefined && field.type !== "boolean") {
-      input.value = field.default;
+  if (field.placeholder) input.placeholder = field.placeholder;
+  if (field.min !== undefined) input.min = field.min;
+  if (field.max !== undefined) input.max = field.max;
+  if (field.step !== undefined) input.step = field.step;
+
+  const hint = document.createElement("small");
+  hint.textContent = `type: ${field.type}`;
+
+  wrapper.append(label, input, hint);
+  return wrapper;
+}
+
+function renderPanel(providerKey) {
+  const panel = document.querySelector("#panel");
+  const schema = SCHEMA[providerKey];
+
+  panel.innerHTML = "";
+
+  const title = document.createElement("h2");
+  title.textContent = schema.label;
+
+  const desc = document.createElement("p");
+  desc.textContent = schema.description;
+
+  panel.append(title, desc);
+
+  schema.fields.forEach((f) => {
+    const el = createField(f);
+
+    // capability system (gray out unsupported)
+    if (schema.capabilities[f.key] === false) {
+      el.querySelector("input").disabled = true;
+      el.style.opacity = 0.4;
+      el.title = "Not supported by this provider";
     }
 
-    if (field.type === "boolean") {
-      input.checked = !!field.default;
-    }
-
-    const labelText = document.createTextNode(" " + field.key);
-
-    const hint = document.createElement("small");
-    hint.textContent = `type: ${field.type}`;
-
-    wrapper.appendChild(document.createTextNode(field.key));
-    wrapper.appendChild(input);
-    wrapper.appendChild(hint);
-
-    container.appendChild(wrapper);
+    panel.appendChild(el);
   });
 }
-
-// CAPABILITY SYSTEM (gray-out unsupported fields)
-function applyCapabilities(providerKey, container) {
-  const caps = PROVIDERS[providerKey].capabilities;
-
-  container.querySelectorAll("[data-key]").forEach((input) => {
-    const key = input.dataset.key;
-
-    const supported = caps[key] !== false;
-
-    if (!supported) {
-      input.disabled = true;
-      input.style.opacity = 0.4;
-      input.title = "Not supported by this provider";
-    } else {
-      input.disabled = false;
-      input.style.opacity = 1;
-      input.title = "";
-    }
-  });
-}
-
-function validate(providerKey, data) {
-  const schema = PROVIDERS[providerKey].fields;
-
-  const errors = [];
-
-  schema.forEach((field) => {
-    const value = data[field.key];
-
-    if (field.type === "number") {
-      if (value !== undefined && isNaN(Number(value))) {
-        errors.push(`${field.key} must be a number`);
-      }
-
-      if (field.min !== undefined && value < field.min) {
-        errors.push(`${field.key} must be >= ${field.min}`);
-      }
-
-      if (field.max !== undefined && value > field.max) {
-        errors.push(`${field.key} must be <= ${field.max}`);
-      }
-    }
-
-    if (!field.optional && (value === "" || value == null)) {
-      errors.push(`${field.key} is required`);
-    }
-  });
-
-  return errors;
-}
-
-// <pre id="json-preview"></pre>
-function updatePreview(data) {
-  const box = document.querySelector("#json-preview");
-  box.textContent = JSON.stringify(data, null, 2);
-}
-
-const form = document.querySelector(".model-picker");
 
 function getProvider() {
-  return document.querySelector('input[name="model"]:checked').id;
+  return document.querySelector("input[name='provider']:checked").value;
 }
 
-function extract(panel) {
+function extract(provider) {
+  const panel = document.querySelector("#panel");
+
   const data = {};
-  panel.querySelectorAll("[name]").forEach((input) => {
+
+  panel.querySelectorAll("[data-key]").forEach((input) => {
+    const key = input.dataset.key;
+
     if (input.type === "checkbox") {
-      data[input.name] = input.checked;
+      data[key] = input.checked;
+    } else if (input.type === "number") {
+      data[key] = input.value === "" ? null : Number(input.value);
     } else {
-      data[input.name] = input.value;
+      data[key] = input.value;
     }
   });
+
   return data;
 }
 
-form.addEventListener("input", () => {
-  const provider = getProvider();
-  const panel = document.querySelector(`[data-provider="${provider}"]`);
+function updatePreview(obj) {
+  document.querySelector("#preview").textContent = JSON.stringify(obj, null, 2);
+}
 
-  const data = extract(panel);
+// App Bootstrap
+const form = document.querySelector(".model-picker");
 
-  updatePreview({ provider, ...data });
+let activeProvider = getProvider();
+
+renderPanel(activeProvider);
+
+document.querySelectorAll("input[name='provider']").forEach((radio) => {
+  radio.addEventListener("change", () => {
+    activeProvider = getProvider();
+    renderPanel(activeProvider);
+  });
 });
 
+// live preview
+form.addEventListener("input", () => {
+  const data = extract(activeProvider);
+  updatePreview({ provider: activeProvider, ...data });
+});
+
+// submit
 form.addEventListener("submit", (e) => {
   e.preventDefault();
 
-  const provider = getProvider();
-  const panel = document.querySelector(`[data-provider="${provider}"]`);
+  const data = extract(activeProvider);
 
-  const data = extract(panel);
-
-  const errors = validate(provider, data);
-
-  if (errors.length) {
-    alert(errors.join("\n"));
-    return;
-  }
-
-  console.log("FINAL CONFIG:", { provider, ...data });
+  console.log("FINAL CONFIG:", {
+    provider: activeProvider,
+    ...data,
+  });
 });
