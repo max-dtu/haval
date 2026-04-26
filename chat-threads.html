@@ -5,39 +5,98 @@
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <title>Talk to Models</title>
         <style>
+            .model-picker {
+                max-width: 600px;
+                margin: 0 auto;
+                font-family: sans-serif;
+            }
+
+            .model-picker__fieldset {
+                border: 1px solid #ddd;
+                padding: 1rem;
+            }
+
+            .model-picker__legend {
+                font-weight: bold;
+                margin-bottom: 1rem;
+            }
+
             /* hide radios */
-            input[type="radio"] {
+            .model-picker__radio {
                 display: none;
             }
 
-            /* hide all panels */
-            .panel {
+            /* tabs */
+            .model-picker__tabs {
+                display: flex;
+                gap: 1rem;
+                border-bottom: 1px solid #ddd;
+                margin-bottom: 1rem;
+            }
+
+            .model-picker__tab {
+                cursor: pointer;
+                padding: 0.5rem;
+            }
+
+            /* panels */
+            .model-picker__panel {
                 display: none;
             }
 
-            /* show exactly one panel */
-            #tab-webllm:checked ~ .panels .panel:nth-child(1) {
+            .model-picker__heading {
+                margin-top: 0;
+            }
+
+            .model-picker__description {
+                font-size: 0.9rem;
+                margin-bottom: 1rem;
+            }
+
+            /* inputs */
+            .model-picker__label {
+                display: flex;
+                flex-direction: column;
+                margin-bottom: 1rem;
+            }
+
+            .model-picker__input {
+                padding: 0.4rem;
+                font-size: 1rem;
+            }
+
+            .model-picker__checkbox {
+                margin-top: 0.5rem;
+            }
+
+            /* show active panel */
+            #webllm:checked
+                ~ .model-picker__tabs
+                + .model-picker__panels
+                .model-picker__panel:nth-child(1),
+            #ollama:checked
+                ~ .model-picker__tabs
+                + .model-picker__panels
+                .model-picker__panel:nth-child(2),
+            #remote:checked
+                ~ .model-picker__tabs
+                + .model-picker__panels
+                .model-picker__panel:nth-child(3) {
                 display: block;
             }
 
-            #tab-ollama:checked ~ .panels .panel:nth-child(2) {
-                display: block;
-            }
-
-            #tab-remote:checked ~ .panels .panel:nth-child(3) {
-                display: block;
-            }
-
-            /* optional: style active tab */
-            #tab-webllm:checked ~ [role="tablist"] label[for="tab-webllm"],
-            #tab-ollama:checked ~ [role="tablist"] label[for="tab-ollama"],
-            #tab-remote:checked ~ [role="tablist"] label[for="tab-remote"] {
+            /* active tab */
+            #webllm:checked ~ .model-picker__tabs label[for="webllm"],
+            #ollama:checked ~ .model-picker__tabs label[for="ollama"],
+            #remote:checked ~ .model-picker__tabs label[for="remote"] {
                 border-bottom: 2px solid black;
             }
 
-            [role="tablist"] {
-                display: flex;
-                gap: 20px;
+            /* responsive */
+            @media (max-width: 480px) {
+                .model-picker__tabs {
+                    flex-direction: column;
+                }
             }
         </style>
     </head>
@@ -81,39 +140,452 @@
             </h1>
         </main>
 
-        <form class="model-picker">
-            <fieldset>
-                <legend>Choose model source</legend>
+        <form class="model-picker" aria-labelledby="model-picker-title">
+            <fieldset class="model-picker__fieldset">
+                <legend id="model-picker-title" class="model-picker__legend">
+                    Choose model source
+                </legend>
 
                 <!-- radios (state) -->
-                <input type="radio" name="model" id="tab-webllm" checked />
-                <input type="radio" name="model" id="tab-ollama" />
-                <input type="radio" name="model" id="tab-remote" />
+                <input
+                    class="model-picker__radio"
+                    type="radio"
+                    name="model"
+                    id="webllm"
+                    checked
+                />
+                <input
+                    class="model-picker__radio"
+                    type="radio"
+                    name="model"
+                    id="ollama"
+                />
+                <input
+                    class="model-picker__radio"
+                    type="radio"
+                    name="model"
+                    id="remote"
+                />
 
-                <!-- tab labels -->
-                <div role="tablist" aria-label="Model source">
-                    <label for="tab-webllm" role="tab">WebLLM</label>
-                    <label for="tab-ollama" role="tab">Ollama</label>
-                    <label for="tab-remote" role="tab">Remote</label>
-                </div>
+                <!-- tab navigation -->
+                <nav
+                    class="model-picker__tabs"
+                    role="tablist"
+                    aria-label="Model source"
+                >
+                    <label class="model-picker__tab" for="webllm" role="tab"
+                        >WebLLM</label
+                    >
+                    <label class="model-picker__tab" for="ollama" role="tab"
+                        >Ollama</label
+                    >
+                    <label class="model-picker__tab" for="remote" role="tab"
+                        >Remote</label
+                    >
+                </nav>
 
                 <!-- panels -->
-                <div class="panels">
-                    <div class="panel" role="tabpanel">
-                        <h2>WebLLM</h2>
-                        <p>WebLLM section</p>
-                    </div>
+                <section class="model-picker__panels">
+                    <!-- WebLLM -->
+                    <section class="model-picker__panel" role="tabpanel">
+                        <h2 class="model-picker__heading">WebLLM (Browser)</h2>
 
-                    <div class="panel" role="tabpanel">
-                        <h2>Ollama</h2>
-                        <p>Ollama section</p>
-                    </div>
+                        <p class="model-picker__description">
+                            Runs locally in your browser using WebGPU. No
+                            backend. Performance depends on your device GPU and
+                            memory.
+                        </p>
 
-                    <div class="panel" role="tabpanel">
-                        <h2>Remote</h2>
-                        <p>Remote section</p>
-                    </div>
-                </div>
+                        <p class="model-picker__guideline">
+                            ⚠️ Lower limits improve speed and reduce browser
+                            memory usage.
+                        </p>
+
+                        <label class="model-picker__label">
+                            Model
+                            <input
+                                class="model-picker__input"
+                                type="text"
+                                placeholder="llama3, mistral, gemma"
+                            />
+                            <small
+                                >Defines which model weights are loaded in the
+                                browser.</small
+                            >
+                        </label>
+
+                        <label class="model-picker__label">
+                            Temperature
+                            <input
+                                class="model-picker__input"
+                                type="number"
+                                step="0.1"
+                                min="0"
+                                max="2"
+                                value="0.7"
+                            />
+                            <small
+                                >Higher = more creative, lower = more
+                                deterministic.</small
+                            >
+                        </label>
+
+                        <label class="model-picker__label">
+                            Max Tokens
+                            <input
+                                class="model-picker__input"
+                                type="number"
+                                min="1"
+                                value="512"
+                            />
+                            <small>Maximum length of generated output.</small>
+                        </label>
+
+                        <label class="model-picker__label">
+                            Top-p (nucleus sampling)
+                            <input
+                                class="model-picker__input"
+                                type="number"
+                                step="0.05"
+                                min="0"
+                                max="1"
+                                value="0.9"
+                            />
+                            <small
+                                >Controls diversity. Lower = safer, more focused
+                                output.</small
+                            >
+                        </label>
+
+                        <label class="model-picker__label">
+                            Top-k
+                            <input
+                                class="model-picker__input"
+                                type="number"
+                                min="1"
+                                value="40"
+                            />
+                            <small
+                                >Limits sampling to top K tokens. Lower = more
+                                deterministic.</small
+                            >
+                        </label>
+
+                        <label class="model-picker__label">
+                            Seed
+                            <input
+                                class="model-picker__input"
+                                type="number"
+                                placeholder="random"
+                            />
+                            <small
+                                >Fixes randomness. Same seed = repeatable
+                                outputs.</small
+                            >
+                        </label>
+
+                        <label class="model-picker__label">
+                            Context Window
+                            <input
+                                class="model-picker__input"
+                                type="number"
+                                value="4096"
+                            />
+                            <small
+                                >Maximum input + output tokens the model can
+                                handle.</small
+                            >
+                        </label>
+                    </section>
+
+                    <!-- Ollama -->
+                    <section class="model-picker__panel" role="tabpanel">
+                        <h2 class="model-picker__heading">
+                            Ollama (Local Server)
+                        </h2>
+
+                        <p class="model-picker__description">
+                            Connects to a local Ollama instance. Parameters map
+                            directly to Ollama API fields.
+                        </p>
+
+                        <p class="model-picker__guideline">
+                            ⚠️ Some models may ignore certain parameters
+                            depending on backend support.
+                        </p>
+
+                        <label class="model-picker__label">
+                            Endpoint
+                            <input
+                                class="model-picker__input"
+                                type="url"
+                                placeholder="http://localhost:11434"
+                            />
+                            <small>Ollama server URL.</small>
+                        </label>
+
+                        <label class="model-picker__label">
+                            Model Name
+                            <input
+                                class="model-picker__input"
+                                type="text"
+                                placeholder="llama3"
+                            />
+                            <small>Must match installed Ollama model.</small>
+                        </label>
+
+                        <label class="model-picker__label">
+                            Temperature
+                            <input
+                                class="model-picker__input"
+                                type="number"
+                                step="0.1"
+                                min="0"
+                                max="2"
+                                value="0.7"
+                            />
+                            <small>Controls randomness of generation.</small>
+                        </label>
+
+                        <label class="model-picker__label">
+                            num_predict (Max Tokens)
+                            <input
+                                class="model-picker__input"
+                                type="number"
+                                min="1"
+                                value="512"
+                            />
+                            <small>Maximum number of tokens to generate.</small>
+                        </label>
+
+                        <label class="model-picker__label">
+                            top_k
+                            <input
+                                class="model-picker__input"
+                                type="number"
+                                min="1"
+                                value="40"
+                            />
+                            <small>Restricts token selection pool.</small>
+                        </label>
+
+                        <label class="model-picker__label">
+                            top_p
+                            <input
+                                class="model-picker__input"
+                                type="number"
+                                step="0.05"
+                                min="0"
+                                max="1"
+                                value="0.9"
+                            />
+                            <small
+                                >Probability-based filtering of tokens.</small
+                            >
+                        </label>
+
+                        <label class="model-picker__label">
+                            repeat_penalty
+                            <input
+                                class="model-picker__input"
+                                type="number"
+                                step="0.1"
+                                min="1"
+                                max="2"
+                                value="1.1"
+                            />
+                            <small
+                                >Reduces repetition. Higher = less repeated
+                                text.</small
+                            >
+                        </label>
+
+                        <label class="model-picker__label">
+                            seed
+                            <input
+                                class="model-picker__input"
+                                type="number"
+                                placeholder="random"
+                            />
+                            <small
+                                >Ensures deterministic outputs if fixed.</small
+                            >
+                        </label>
+
+                        <label class="model-picker__label">
+                            context_length
+                            <input
+                                class="model-picker__input"
+                                type="number"
+                                value="4096"
+                            />
+                            <small
+                                >Total memory window for input + output.</small
+                            >
+                        </label>
+
+                        <label class="model-picker__label">
+                            stream
+                            <input
+                                type="checkbox"
+                                class="model-picker__checkbox"
+                                checked
+                            />
+                            <small
+                                >Streams tokens instead of waiting for full
+                                response.</small
+                            >
+                        </label>
+                    </section>
+
+                    <!-- Remote -->
+                    <section class="model-picker__panel" role="tabpanel">
+                        <h2 class="model-picker__heading">Remote API</h2>
+
+                        <p class="model-picker__description">
+                            Uses external LLM providers. Parameters are sent
+                            directly in API requests.
+                        </p>
+
+                        <p class="model-picker__guideline">
+                            ⚠️ Some APIs may ignore unsupported parameters or
+                            override them server-side.
+                        </p>
+
+                        <label class="model-picker__label">
+                            API URL
+                            <input
+                                class="model-picker__input"
+                                type="url"
+                                placeholder="https://api.provider.com/v1/chat"
+                            />
+                            <small>Endpoint for LLM requests.</small>
+                        </label>
+
+                        <label class="model-picker__label">
+                            API Key
+                            <input
+                                class="model-picker__input"
+                                type="password"
+                            />
+                            <small
+                                >Authentication token (never expose
+                                publicly).</small
+                            >
+                        </label>
+
+                        <label class="model-picker__label">
+                            Model
+                            <input
+                                class="model-picker__input"
+                                type="text"
+                                placeholder="gpt-4.1, claude, etc."
+                            />
+                            <small>Model identifier used by provider.</small>
+                        </label>
+
+                        <label class="model-picker__label">
+                            Temperature
+                            <input
+                                class="model-picker__input"
+                                type="number"
+                                step="0.1"
+                                min="0"
+                                max="2"
+                                value="0.7"
+                            />
+                            <small>Controls randomness of output.</small>
+                        </label>
+
+                        <label class="model-picker__label">
+                            max_tokens
+                            <input
+                                class="model-picker__input"
+                                type="number"
+                                min="1"
+                                value="1024"
+                            />
+                            <small>Maximum output length allowed by API.</small>
+                        </label>
+
+                        <label class="model-picker__label">
+                            top_p
+                            <input
+                                class="model-picker__input"
+                                type="number"
+                                step="0.05"
+                                min="0"
+                                max="1"
+                                value="0.9"
+                            />
+                            <small
+                                >Diversity control via probability
+                                cutoff.</small
+                            >
+                        </label>
+
+                        <label class="model-picker__label">
+                            presence_penalty
+                            <input
+                                class="model-picker__input"
+                                type="number"
+                                step="0.1"
+                                min="-2"
+                                max="2"
+                                value="0"
+                            />
+                            <small>Encourages new topics vs repetition.</small>
+                        </label>
+
+                        <label class="model-picker__label">
+                            frequency_penalty
+                            <input
+                                class="model-picker__input"
+                                type="number"
+                                step="0.1"
+                                min="-2"
+                                max="2"
+                                value="0"
+                            />
+                            <small>Reduces repeated word usage.</small>
+                        </label>
+
+                        <label class="model-picker__label">
+                            seed
+                            <input
+                                class="model-picker__input"
+                                type="number"
+                                placeholder="optional"
+                            />
+                            <small
+                                >Makes output deterministic if supported.</small
+                            >
+                        </label>
+
+                        <label class="model-picker__label">
+                            context_window (informational)
+                            <input
+                                class="model-picker__input"
+                                type="number"
+                                placeholder="varies by model"
+                            />
+                            <small
+                                >Not always configurable. Depends on
+                                provider/model.</small
+                            >
+                        </label>
+
+                        <label class="model-picker__label">
+                            stream
+                            <input
+                                type="checkbox"
+                                class="model-picker__checkbox"
+                                checked
+                            />
+                            <small>Enables token streaming response.</small>
+                        </label>
+                    </section>
+                </section>
             </fieldset>
         </form>
     </body>
