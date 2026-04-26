@@ -79,3 +79,19 @@ Added sensible defaults to `.gitignore`: macOS (`.DS_Store`), editors (`.vscode/
 
 ## Assistant
 Understood. Simplified `correspondence.md` to just the chat log — user messages verbatim, assistant responses summarized. Removed the Project Changes table.
+
+---
+
+## 11. User
+> from now on, just append the last correspondence, no need to overwrite
+
+## Assistant
+Noted. Will only append new entries going forward.
+
+---
+
+## 12. User
+> can you make a server using the Go programming language so i can view index.html
+
+## Assistant
+Created `server.go` — a minimal Go file server using `net/http` that serves all static files from the current directory on `http://localhost:8080`. Run it with `go run server.go`.
