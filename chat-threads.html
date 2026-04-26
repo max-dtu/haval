@@ -98,6 +98,18 @@
                     flex-direction: column;
                 }
             }
+
+            .sidebar--threads {
+                border: 2px solid;
+            }
+
+            main {
+                border: 2px solid;
+            }
+
+            .model-picker {
+                border: 2px solid;
+            }
         </style>
     </head>
 
@@ -187,7 +199,11 @@
                 <!-- panels -->
                 <section class="model-picker__panels">
                     <!-- WebLLM -->
-                    <section class="model-picker__panel" role="tabpanel">
+                    <section
+                        class="model-picker__panel"
+                        role="tabpanel"
+                        data-provider="webllm"
+                    >
                         <h2 class="model-picker__heading">WebLLM (Browser)</h2>
 
                         <p class="model-picker__description">
@@ -299,7 +315,11 @@
                     </section>
 
                     <!-- Ollama -->
-                    <section class="model-picker__panel" role="tabpanel">
+                    <section
+                        class="model-picker__panel"
+                        role="tabpanel"
+                        data-provider="ollama"
+                    >
                         <h2 class="model-picker__heading">
                             Ollama (Local Server)
                         </h2>
@@ -439,7 +459,11 @@
                     </section>
 
                     <!-- Remote -->
-                    <section class="model-picker__panel" role="tabpanel">
+                    <section
+                        class="model-picker__panel"
+                        role="tabpanel"
+                        data-provider="remote"
+                    >
                         <h2 class="model-picker__heading">Remote API</h2>
 
                         <p class="model-picker__description">
@@ -587,6 +611,7 @@
                     </section>
                 </section>
             </fieldset>
+            <input type="submit" value="Submit" />
         </form>
     </body>
 </html>
