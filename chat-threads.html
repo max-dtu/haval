@@ -1,0 +1,385 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Chat Threads</title>
+        <style>
+            *,
+            *::before,
+            *::after {
+                box-sizing: border-box;
+                margin: 0;
+                padding: 0;
+            }
+
+            body {
+                font-family:
+                    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                    sans-serif;
+                background: #212121;
+                color: #ececec;
+                display: flex;
+                height: 100vh;
+                overflow: hidden;
+            }
+
+            /* ── Sidebar ── */
+            .sidebar {
+                width: 260px;
+                min-width: 260px;
+                background: #171717;
+                display: flex;
+                flex-direction: column;
+                padding: 12px 8px;
+                gap: 4px;
+                border-right: 1px solid #2e2e2e;
+            }
+
+            .sidebar-header {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                padding: 8px 8px 12px;
+                border-bottom: 1px solid #2e2e2e;
+                margin-bottom: 8px;
+            }
+
+            .sidebar-header span {
+                font-size: 15px;
+                font-weight: 600;
+                color: #ececec;
+            }
+
+            .btn-new {
+                background: #2f2f2f;
+                border: none;
+                color: #ececec;
+                width: 32px;
+                height: 32px;
+                border-radius: 8px;
+                font-size: 20px;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                transition: background 0.15s;
+            }
+            .btn-new:hover {
+                background: #3f3f3f;
+            }
+
+            .sidebar-section-label {
+                font-size: 11px;
+                color: #888;
+                padding: 6px 8px 2px;
+                text-transform: uppercase;
+                letter-spacing: 0.05em;
+            }
+
+            .thread-list {
+                display: flex;
+                flex-direction: column;
+                gap: 2px;
+                flex: 1;
+                overflow-y: auto;
+            }
+
+            .thread-item {
+                padding: 9px 12px;
+                border-radius: 8px;
+                cursor: pointer;
+                font-size: 13px;
+                color: #ccc;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                transition: background 0.15s;
+            }
+            .thread-item:hover {
+                background: #2a2a2a;
+            }
+            .thread-item.active {
+                background: #2f2f2f;
+                color: #fff;
+            }
+
+            /* ── Main ── */
+            .main {
+                flex: 1;
+                display: flex;
+                flex-direction: column;
+                overflow: hidden;
+            }
+
+            .chat-header {
+                padding: 16px 24px;
+                font-size: 14px;
+                color: #888;
+                border-bottom: 1px solid #2e2e2e;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+
+            .chat-header span {
+                color: #ececec;
+                font-weight: 500;
+            }
+
+            /* ── Messages ── */
+            .messages {
+                flex: 1;
+                overflow-y: auto;
+                padding: 32px 0;
+                display: flex;
+                flex-direction: column;
+                gap: 0;
+            }
+
+            .message {
+                display: flex;
+                padding: 16px 24px;
+                gap: 16px;
+                max-width: 800px;
+                width: 100%;
+                margin: 0 auto;
+            }
+
+            .message.assistant {
+                background: transparent;
+            }
+            .message.user {
+                flex-direction: row-reverse;
+            }
+
+            .avatar {
+                width: 32px;
+                height: 32px;
+                border-radius: 50%;
+                flex-shrink: 0;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 13px;
+                font-weight: 600;
+            }
+
+            .avatar.user-avatar {
+                background: #19c37d;
+                color: #fff;
+            }
+            .avatar.ai-avatar {
+                background: #ab68ff;
+                color: #fff;
+            }
+
+            .bubble {
+                max-width: 680px;
+                line-height: 1.65;
+                font-size: 14px;
+                padding: 10px 14px;
+                border-radius: 12px;
+            }
+
+            .message.user .bubble {
+                background: #2f2f2f;
+                color: #ececec;
+                border-bottom-right-radius: 2px;
+            }
+
+            .message.assistant .bubble {
+                background: transparent;
+                color: #d1d1d1;
+                padding-left: 0;
+            }
+
+            /* Empty state */
+            .empty-state {
+                flex: 1;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                gap: 12px;
+                color: #555;
+            }
+
+            .empty-state h2 {
+                font-size: 22px;
+                color: #888;
+                font-weight: 500;
+            }
+            .empty-state p {
+                font-size: 14px;
+            }
+
+            /* ── Input area ── */
+            .input-area {
+                padding: 16px 24px 24px;
+                display: flex;
+                justify-content: center;
+            }
+
+            .input-wrap {
+                width: 100%;
+                max-width: 800px;
+                background: #2f2f2f;
+                border: 1px solid #3a3a3a;
+                border-radius: 14px;
+                display: flex;
+                align-items: flex-end;
+                gap: 8px;
+                padding: 10px 12px;
+                transition: border-color 0.15s;
+            }
+            .input-wrap:focus-within {
+                border-color: #555;
+            }
+
+            .input-wrap textarea {
+                flex: 1;
+                background: transparent;
+                border: none;
+                outline: none;
+                color: #ececec;
+                font-size: 14px;
+                font-family: inherit;
+                resize: none;
+                max-height: 200px;
+                line-height: 1.5;
+            }
+
+            .input-wrap textarea::placeholder {
+                color: #666;
+            }
+
+            .btn-send {
+                background: #19c37d;
+                border: none;
+                color: #fff;
+                width: 32px;
+                height: 32px;
+                border-radius: 8px;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                flex-shrink: 0;
+                transition: background 0.15s;
+            }
+            .btn-send:hover {
+                background: #15a86b;
+            }
+            .btn-send svg {
+                width: 16px;
+                height: 16px;
+            }
+
+            .input-hint {
+                text-align: center;
+                font-size: 11px;
+                color: #555;
+                margin-top: 8px;
+            }
+        </style>
+    </head>
+    <body>
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <span>Threads</span>
+                <button class="btn-new" title="New chat">+</button>
+            </div>
+
+            <div class="sidebar-section-label">Today</div>
+            <div class="thread-list">
+                <div class="thread-item active">
+                    What is the capital of France?
+                </div>
+                <div class="thread-item">Explain quantum entanglement</div>
+                <div class="thread-item">Write a haiku about rain</div>
+            </div>
+
+            <div class="sidebar-section-label">Yesterday</div>
+            <div class="thread-list">
+                <div class="thread-item">Go vs Rust performance</div>
+                <div class="thread-item">Best practices for REST APIs</div>
+            </div>
+        </aside>
+
+        <!-- Main chat area -->
+        <main class="main">
+            <div class="chat-header">
+                Thread: <span>What is the capital of France?</span>
+            </div>
+
+            <div class="messages">
+                <!-- User message -->
+                <div class="message user">
+                    <div class="avatar user-avatar">U</div>
+                    <div class="bubble">What is the capital of France?</div>
+                </div>
+
+                <!-- Assistant message -->
+                <div class="message assistant">
+                    <div class="avatar ai-avatar">AI</div>
+                    <div class="bubble">
+                        The capital of France is <strong>Paris</strong>. It is
+                        the country's largest city and serves as the political,
+                        economic, and cultural centre of France.
+                    </div>
+                </div>
+
+                <!-- User message -->
+                <div class="message user">
+                    <div class="avatar user-avatar">U</div>
+                    <div class="bubble">What is the population of Paris?</div>
+                </div>
+
+                <!-- Assistant message -->
+                <div class="message assistant">
+                    <div class="avatar ai-avatar">AI</div>
+                    <div class="bubble">
+                        The city of Paris proper has a population of
+                        approximately <strong>2.1 million</strong>
+                        people. The greater Paris metropolitan area, however, is
+                        home to around
+                        <strong>12 million</strong> people, making it one of the
+                        largest urban areas in Europe.
+                    </div>
+                </div>
+            </div>
+
+            <!-- Input -->
+            <div class="input-area">
+                <div>
+                    <div class="input-wrap">
+                        <textarea
+                            rows="1"
+                            placeholder="Send a message…"
+                        ></textarea>
+                        <button class="btn-send" title="Send">
+                            <svg
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                            >
+                                <line x1="22" y1="2" x2="11" y2="13"></line>
+                                <polygon
+                                    points="22 2 15 22 11 13 2 9 22 2"
+                                ></polygon>
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="input-hint">
+                        Mockup only — no backend connected yet.
+                    </div>
+                </div>
+            </div>
+        </main>
+    </body>
+</html>

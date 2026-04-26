@@ -95,3 +95,11 @@ Noted. Will only append new entries going forward.
 
 ## Assistant
 Created `server.go` — a minimal Go file server using `net/http` that serves all static files from the current directory on `http://localhost:8080`. Run it with `go run server.go`.
+
+---
+
+## 13. User
+> design a chatGPT like design in chat-threads.html, where you have a sidebar for history (we will use browser storage using sqlite). clicking +, will create a new instance of a form where user can chat. only the mockup for now.
+
+## Assistant
+Built a full ChatGPT-style mockup in `chat-threads.html`. Dark theme with a left sidebar showing thread history grouped by Today/Yesterday, a + button for new chats, and a main area with user/assistant message bubbles and a textarea input. Static mockup only, no backend connected yet.
