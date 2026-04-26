@@ -1,3 +1,5 @@
+// schema → generate UI → apply defaults → apply capability rules → validate → extract → preview
+
 const PROVIDERS = {
   webllm: {
     capabilities: {
