@@ -192,6 +192,10 @@ body {
     background: var(--surface-accent);
 }
 
+.thread-list__button--open {
+    border-color: #9dc9b9;
+}
+
 .thread-list__title-row {
     display: flex;
     align-items: center;
@@ -228,6 +232,7 @@ body {
     min-width: 0;
     display: flex;
     align-items: stretch;
+    overflow: auto;
 }
 
 .empty-state {
@@ -256,7 +261,10 @@ body {
 
 .thread-stage {
     width: 100%;
-    display: flex;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 1rem;
+    align-content: start;
 }
 
 .thread-panel {
@@ -511,6 +519,10 @@ body {
 
     .thread-panel__config {
         justify-content: flex-start;
+    }
+
+    .thread-stage {
+        grid-template-columns: 1fr;
     }
 }
 

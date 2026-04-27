@@ -46,15 +46,12 @@ async function initialize() {
   bindEvents();
   await hydrateState();
 
-  if (!state.threads.length) {
-    createThread();
-    return;
-  }
+  state.threads.forEach((thread) => {
+    thread.isOpen = false;
+  });
+  state.activeThreadId = null;
 
-  if (!findThreadById(state.activeThreadId)) {
-    state.activeThreadId = state.threads[0].id;
-    persistUiState();
-  }
+  persistUiState();
 
   render();
 }
@@ -94,13 +91,24 @@ function bindEvents() {
     }
 
     const { threadId } = button.dataset;
-    if (!threadId || state.activeThreadId === threadId) {
+    if (!threadId) {
       return;
+    }
+
+    const thread = findThreadById(threadId);
+    if (!thread) {
+      return;
+    }
+
+    if (!thread.isOpen) {
+      thread.isOpen = true;
+      persistThreadAsync(thread, { syncMessages: false });
     }
 
     state.activeThreadId = threadId;
     persistUiState();
     render();
+    focusComposer(threadId);
   });
 
   elements.threadStage.addEventListener("click", handleThreadStageClick);
@@ -116,7 +124,7 @@ function createThread() {
     createdAt: now,
     updatedAt: now,
     selectedModel: availableModels[0]?.value || "",
-    minimized: false,
+    isOpen: true,
     messages: [buildMessage("assistant", READY_MESSAGE, now)],
   };
 
@@ -125,25 +133,32 @@ function createThread() {
   persistUiState();
   persistThreadAsync(thread, { syncMessages: true });
   render();
-  focusComposer();
+  focusComposer(thread.id);
 }
 
 function handleThreadStageClick(event) {
-  const button = event.target.closest("button[data-action]");
+  const button = event.target.closest('button[data-action="minimize-thread"]');
   if (!button) {
     return;
   }
 
-  const activeThread = getActiveThread();
-  if (!activeThread) {
+  const thread = getThreadFromEventTarget(button);
+  if (!thread) {
     return;
   }
 
-  if (button.dataset.action === "minimize-thread") {
-    activeThread.minimized = !activeThread.minimized;
-    persistThreadAsync(activeThread, { syncMessages: false });
-    renderActiveThread();
+  thread.isOpen = false;
+
+  if (state.activeThreadId === thread.id) {
+    const nextOpenThread = state.threads.find(
+      (candidate) => candidate.id !== thread.id && candidate.isOpen
+    );
+    state.activeThreadId = nextOpenThread?.id || null;
   }
+
+  persistUiState();
+  persistThreadAsync(thread, { syncMessages: false });
+  render();
 }
 
 function handleThreadStageChange(event) {
@@ -152,16 +167,18 @@ function handleThreadStageChange(event) {
     return;
   }
 
-  const activeThread = getActiveThread();
-  if (!activeThread) {
+  const thread = getThreadFromEventTarget(select);
+  if (!thread) {
     return;
   }
 
-  activeThread.selectedModel = select.value;
-  activeThread.updatedAt = new Date().toISOString();
-  moveThreadToTop(activeThread.id);
+  thread.selectedModel = select.value;
+  thread.updatedAt = new Date().toISOString();
+  moveThreadToTop(thread.id);
+  state.activeThreadId = thread.id;
 
-  persistThreadAsync(activeThread, { syncMessages: false });
+  persistUiState();
+  persistThreadAsync(thread, { syncMessages: false });
   render();
 }
 
@@ -183,32 +200,35 @@ function handleThreadStageSubmit(event) {
     return;
   }
 
-  const activeThread = getActiveThread();
-  if (!activeThread) {
+  const thread = getThreadFromEventTarget(form);
+  if (!thread) {
     return;
   }
 
   input.value = "";
 
   const now = new Date().toISOString();
-  activeThread.messages.push(buildMessage("user", messageText, now));
-  activeThread.updatedAt = now;
-  activeThread.minimized = false;
+  thread.messages.push(buildMessage("user", messageText, now));
+  thread.updatedAt = now;
+  thread.isOpen = true;
 
-  if (activeThread.title === UNTITLED_TITLE) {
-    activeThread.title = buildThreadTitle(messageText);
+  if (thread.title === UNTITLED_TITLE) {
+    thread.title = buildThreadTitle(messageText);
   }
 
-  moveThreadToTop(activeThread.id);
-  persistThreadAsync(activeThread, { syncMessages: true });
+  moveThreadToTop(thread.id);
+  state.activeThreadId = thread.id;
+
+  persistUiState();
+  persistThreadAsync(thread, { syncMessages: true });
   render();
-  focusComposer();
+  focusComposer(thread.id);
 }
 
 function render() {
   sortThreadsByRecency();
   renderThreadList();
-  renderActiveThread();
+  renderThreadPanels();
 }
 
 function renderThreadList() {
@@ -229,6 +249,10 @@ function renderThreadList() {
 
     if (thread.id === state.activeThreadId) {
       button.classList.add("thread-list__button--active");
+    }
+
+    if (thread.isOpen) {
+      button.classList.add("thread-list__button--open");
     }
 
     const titleRow = document.createElement("div");
@@ -268,59 +292,68 @@ function renderThreadList() {
   }
 }
 
-function renderActiveThread() {
-  const activeThread = getActiveThread();
+function renderThreadPanels() {
+  const openThreads = state.threads.filter((thread) => thread.isOpen);
   elements.threadStage.textContent = "";
 
-  if (!activeThread) {
+  if (!openThreads.length) {
     elements.emptyState.hidden = false;
     return;
   }
 
   elements.emptyState.hidden = true;
 
-  const fragment = elements.threadTemplate.content.cloneNode(true);
-  const panel = fragment.querySelector(".thread-panel");
-  const title = fragment.querySelector('[data-role="thread-title"]');
-  const timestamp = fragment.querySelector('[data-role="thread-timestamp"]');
-  const modelSelect = fragment.querySelector('select[data-action="select-model"]');
-  const modelField = fragment.querySelector(".thread-panel__model-field");
-  const messageList = fragment.querySelector('[data-role="message-list"]');
-  const composerForm = fragment.querySelector('form[data-action="send-message"]');
-  const minimizeButton = fragment.querySelector('button[data-action="minimize-thread"]');
+  const fragment = document.createDocumentFragment();
 
-  if (!panel || !title || !timestamp || !modelSelect || !modelField || !messageList || !composerForm || !minimizeButton) {
-    return;
-  }
+  openThreads.forEach((thread) => {
+    const panelFragment = elements.threadTemplate.content.cloneNode(true);
+    const panel = panelFragment.querySelector(".thread-panel");
+    const title = panelFragment.querySelector('[data-role="thread-title"]');
+    const timestamp = panelFragment.querySelector('[data-role="thread-timestamp"]');
+    const modelSelect = panelFragment.querySelector('select[data-action="select-model"]');
+    const modelField = panelFragment.querySelector(".thread-panel__model-field");
+    const messageList = panelFragment.querySelector('[data-role="message-list"]');
+    const composerLabel = panelFragment.querySelector('[data-role="composer-label"]');
+    const composerInput = panelFragment.querySelector('[data-role="composer-input"]');
+    const minimizeButton = panelFragment.querySelector('button[data-action="minimize-thread"]');
 
-  title.textContent = activeThread.title;
+    if (!panel || !title || !timestamp || !modelSelect || !modelField || !messageList || !composerInput || !minimizeButton) {
+      return;
+    }
 
-  const firstMessage = activeThread.messages[0];
-  const startedAt = firstMessage?.createdAt || activeThread.createdAt;
-
-  timestamp.dateTime = startedAt;
-  timestamp.textContent = `Started ${formatTimestamp(startedAt)}`;
-
-  const selectedModel = getValidSelectedModel(activeThread.selectedModel);
-  activeThread.selectedModel = selectedModel;
-  populateModelSelect(modelSelect, selectedModel);
-  modelField.hidden = availableModels.length === 0;
-
-  renderMessages(messageList, activeThread.messages);
-
-  if (activeThread.minimized) {
-    panel.dataset.state = "collapsed";
-    minimizeButton.textContent = "+";
-    minimizeButton.setAttribute("aria-label", "Expand chat");
-    messageList.hidden = true;
-    composerForm.hidden = true;
-  } else {
+    panel.dataset.threadId = thread.id;
     panel.dataset.state = "expanded";
+
+    if (thread.id === state.activeThreadId) {
+      panel.dataset.active = "true";
+    }
+
+    title.textContent = thread.title;
+
+    const firstMessage = thread.messages[0];
+    const startedAt = firstMessage?.createdAt || thread.createdAt;
+
+    timestamp.dateTime = startedAt;
+    timestamp.textContent = `Started ${formatTimestamp(startedAt)}`;
+
+    const selectedModel = getValidSelectedModel(thread.selectedModel);
+    thread.selectedModel = selectedModel;
+    populateModelSelect(modelSelect, selectedModel);
+    modelField.hidden = availableModels.length === 0;
+
+    const composerInputId = `thread-message-input-${thread.id}`;
+    composerInput.id = composerInputId;
+    if (composerLabel) {
+      composerLabel.htmlFor = composerInputId;
+    }
+
     minimizeButton.textContent = "-";
-    minimizeButton.setAttribute("aria-label", "Minimize chat");
-    messageList.hidden = false;
-    composerForm.hidden = false;
-  }
+    minimizeButton.setAttribute("aria-label", "Minimize chat to sidebar");
+    minimizeButton.dataset.threadId = thread.id;
+
+    renderMessages(messageList, thread.messages);
+    fragment.appendChild(panelFragment);
+  });
 
   elements.threadStage.appendChild(fragment);
 }
@@ -471,7 +504,7 @@ function sanitizeThread(rawThread) {
     createdAt,
     updatedAt: isValidDate(rawThread.updatedAt) ? rawThread.updatedAt : createdAt,
     selectedModel: getValidSelectedModel(rawThread.selectedModel),
-    minimized: Boolean(rawThread.minimized),
+    isOpen: typeof rawThread.isOpen === "boolean" ? rawThread.isOpen : false,
     messages: messages.length ? messages : [buildMessage("assistant", READY_MESSAGE, createdAt)],
   };
 }
@@ -730,12 +763,23 @@ function getThreadSnippet(thread) {
   return lastMessage?.content || READY_MESSAGE;
 }
 
-function getActiveThread() {
-  return findThreadById(state.activeThreadId);
-}
-
 function findThreadById(threadId) {
   return state.threads.find((thread) => thread.id === threadId) || null;
+}
+
+function getThreadFromEventTarget(target) {
+  if (!target || typeof target.closest !== "function") {
+    return null;
+  }
+
+  const panel = target.closest(".thread-panel");
+  const threadId = panel?.dataset.threadId || target.dataset?.threadId;
+
+  if (!threadId) {
+    return null;
+  }
+
+  return findThreadById(threadId);
 }
 
 function moveThreadToTop(threadId) {
@@ -783,9 +827,12 @@ function formatTimestamp(value) {
   }).format(new Date(value));
 }
 
-function focusComposer() {
+function focusComposer(threadId = state.activeThreadId) {
   window.requestAnimationFrame(() => {
-    const input = elements.threadStage.querySelector('[data-role="composer-input"]');
+    const selector = threadId
+      ? `.thread-panel[data-thread-id="${threadId}"] [data-role="composer-input"]`
+      : '[data-role="composer-input"]';
+    const input = elements.threadStage.querySelector(selector);
     if (!input || input.closest("[hidden]")) {
       return;
     }
@@ -960,7 +1007,7 @@ function toThreadRecord(thread) {
     createdAt: thread.createdAt,
     updatedAt: thread.updatedAt,
     selectedModel: thread.selectedModel,
-    minimized: thread.minimized,
+    isOpen: thread.isOpen,
   };
 }
 

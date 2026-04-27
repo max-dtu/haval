@@ -48,10 +48,7 @@
 
         <main class="main">
             <section class="empty-state" data-role="empty-state">
-                <h2 class="empty-state__title">Start a conversation</h2>
-                <p class="empty-state__copy">
-                    Create a new thread from the sidebar, choose a model, and type your first message.
-                </p>
+                <h2 class="empty-state__title">From the sidebar choose a thread or create one</h2>
             </section>
 
             <section class="thread-stage" data-role="thread-stage" aria-live="polite"></section>
@@ -85,9 +82,8 @@
             <ol class="message-list" data-role="message-list"></ol>
 
             <form class="composer" data-action="send-message">
-                <label class="visually-hidden" for="thread-message-input">Type your message</label>
+                <label class="visually-hidden" data-role="composer-label">Type your message</label>
                 <input
-                    id="thread-message-input"
                     type="text"
                     placeholder="Type your message here..."
                     data-role="composer-input"
