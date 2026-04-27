@@ -16,8 +16,6 @@ export const providerPlugins = [
 	vllmPlugin,
 ];
 
-export const providerCapabilities = providerPlugins.reduce((acc, plugin) => {
-	acc[plugin.id] = plugin.capabilities || {};
-	return acc;
-}, {});
-
+export const providerCapabilities = Object.fromEntries(
+	providerPlugins.map((plugin) => [plugin.id, plugin.supported_features || {}])
+);

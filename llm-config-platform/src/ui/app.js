@@ -1,7 +1,8 @@
 import { buildUnifiedRequest } from "../core/unifiedRequest.js";
 import { registry } from "../core/registry.js";
-import { providerPlugins } from "../schema/capabilities.js";
+import { providerPlugins } from "../providers/catalog.js";
 import { clearNode, createElement } from "../utils/dom.js";
+import { isPlainObject } from "../utils/normalize.js";
 
 registry.registerMany(providerPlugins);
 
@@ -108,7 +109,7 @@ function validatePayload(rawText) {
 		};
 	}
 
-	if (!parsed || typeof parsed !== "object") {
+	if (!isPlainObject(parsed)) {
 		return {
 			ok: false,
 			errors: ["Input must be a JSON object"],
@@ -122,14 +123,30 @@ function validatePayload(rawText) {
 		};
 	}
 
-	if (!parsed.config || typeof parsed.config !== "object") {
+	if (!isPlainObject(parsed.config)) {
 		return {
 			ok: false,
-			errors: ["config is required and must be an object"],
+			errors: ["config is required and must be a plain object"],
 		};
 	}
 
 	return buildUnifiedRequest(parsed.provider, parsed.config);
+}
+
+function formatResult(result) {
+	return JSON.stringify(
+		{
+			ok: result.ok,
+			provider: result.provider,
+			raw_config: result.raw_config,
+			normalized_config: result.normalized_config,
+			supported_features: result.supported_features,
+			transformations: result.transformations,
+			provider_request: result.provider_request,
+		},
+		null,
+		2
+	);
 }
 
 export function mountModelPicker(target) {
@@ -148,8 +165,30 @@ export function mountModelPicker(target) {
 	});
 	const helper = createElement("p", {
 		className: "model-picker__description",
-		text: `Set provider and config in JSON. Available providers: ${providers}`,
+		text: `Set provider and config in JSON. Known fields are normalized, extra provider-specific fields are preserved and passed through. Available providers: ${providers}`,
 	});
+	const guidance = createElement("div", { className: "model-picker__guidance" });
+	const guidanceTitle = createElement("p", {
+		className: "model-picker__guidance-title",
+		text: "How to read the output",
+	});
+	const guidanceList = createElement("ul", { className: "model-picker__guidance-list" });
+	[
+		"`raw_config` shows exactly what you entered.",
+		"`normalized_config` shows defaults and type normalization applied by the platform.",
+		"`supported_features` shows the platform's declared feature support for the selected provider.",
+		"`transformations` lists what was defaulted, normalized, or passed through untouched.",
+		"`provider_request` shows the final provider-specific payload that would be sent.",
+		"Extra provider-specific fields are preserved so you can keep full control over advanced options.",
+	].forEach((text) => {
+		guidanceList.appendChild(
+			createElement("li", {
+				className: "model-picker__guidance-item",
+				text,
+			})
+		);
+	});
+	guidance.append(guidanceTitle, guidanceList);
 	const examplesTitle = createElement("p", {
 		className: "model-picker__description",
 		text: "Examples (copy one and edit values):",
@@ -178,7 +217,7 @@ export function mountModelPicker(target) {
 
 	textarea.value = JSON.stringify(getInitialPayload(), null, 2);
 
-	fieldset.append(legend, helper, examplesTitle, examples, textarea, status, preview, submit);
+	fieldset.append(legend, helper, guidance, examplesTitle, examples, textarea, status, preview, submit);
 	form.append(fieldset);
 	clearNode(container);
 	container.appendChild(form);
@@ -197,7 +236,7 @@ export function mountModelPicker(target) {
 			? "Valid input. Unified request built successfully."
 			: "JSON is valid.";
 		status.classList.remove("model-picker__status--error");
-		preview.textContent = JSON.stringify(result, null, 2);
+		preview.textContent = formatResult(result);
 	}
 
 	textarea.addEventListener("input", () => updateFeedback(false));
@@ -213,4 +252,3 @@ export function mountModelPicker(target) {
 if (document.querySelector("#model-picker-root")) {
 	mountModelPicker("#model-picker-root");
 }
-
