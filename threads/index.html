@@ -5,71 +5,98 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Talk to Models</title>
-
-    <style>
-        .thread {
-            border: 2px solid green;
-        }
-    </style>
+    <link rel="stylesheet" href="./threads.css" />
+    <script type="module" src="./threads.js" defer></script>
 </head>
 
 <body>
-    <aside class="sidebar sidebar--threads" data-state="open">
-        <header class="sidebar--threads__header">
-            <h2 class="sidebar--threads__title">Threads</h2>
-
-            <button type="button" aria-label="Start new chat" data-action="new-thread">
-                +
-            </button>
-
-            <form role="search" data-action="search-threads">
-                <label for="thread-search-input">Search threads</label>
-                <input id="thread-search-input" type="search" data-action="search-threads" />
-            </form>
-        </header>
-
-        <nav class="sidebar--threads__nav" aria-label="Thread list">
-            <ul class="thread-list">
-                <!-- thread items go here -->
-                <!-- example:
-                    <li class="thread-list__item" data-thread-id="123"></li>
-                    -->
-            </ul>
-        </nav>
-    </aside>
-
-    <main class="main">
-        <h1 class="main__title">
-            From the sidebar, click + or select a previous chat
-        </h1>
-
-
-        <template class="thread" id="thread">
-            <header class="thread__header">
-                <h2 class="thread__title">Untitled Thread <!-- to be updated--></h2>
-                <time class="thread__timestamp" datetime=""><!-- the timestamp of the first message --></time>
-
-                <div class="thread__config">
-                    <select id="car-select" name="car">
-                        <!-- The previously selected models will be populated by JavaScript. if user never have selected a model, just hide as the user will have to click on /llm-config-platform/index.html-->
-
-                    </select>
-
-                    <a href="/llm-config-platform/index.html">LLM Config Platform</a>
-
+    <div class="layout">
+        <aside class="sidebar sidebar--threads" data-state="open">
+            <header class="sidebar--threads__header">
+                <div class="sidebar--threads__title-row">
+                    <h1 class="sidebar--threads__title">Threads</h1>
+                    <button
+                        type="button"
+                        class="sidebar--threads__new"
+                        aria-label="Start new chat"
+                        data-action="new-thread"
+                    >
+                        +
+                    </button>
                 </div>
-                <button type="button" aria-label="Minimize chat" data-action="minimize-thread">
-                    -
-                </button>
+
+                <form class="sidebar--threads__search" role="search" data-action="search-threads">
+                    <label class="visually-hidden" for="thread-search-input">Search threads</label>
+                    <input
+                        id="thread-search-input"
+                        type="search"
+                        data-role="thread-search-input"
+                        placeholder="Search by title or latest message"
+                    />
+                </form>
             </header>
 
-            <p>Ready when you are.</p>
-            <input type="text" placeholder="Type your message here..." />
-        </template>
+            <nav class="sidebar--threads__nav" aria-label="Thread list">
+                <ul class="thread-list" data-role="thread-list">
+                    <!-- thread items are rendered in threads.js -->
+                </ul>
+                <p class="thread-list__empty" data-role="thread-list-empty">
+                    No threads yet. Click + to start.
+                </p>
+            </nav>
+        </aside>
 
+        <main class="main">
+            <section class="empty-state" data-role="empty-state">
+                <h2 class="empty-state__title">Start a conversation</h2>
+                <p class="empty-state__copy">
+                    Create a new thread from the sidebar, choose a model, and type your first message.
+                </p>
+            </section>
 
+            <section class="thread-stage" data-role="thread-stage" aria-live="polite"></section>
+        </main>
+    </div>
 
-    </main>
+    <template id="thread">
+        <article class="thread-panel" data-state="expanded">
+            <header class="thread-panel__header">
+                <div>
+                    <h2 class="thread-panel__title" data-role="thread-title">Untitled Thread</h2>
+                    <time class="thread-panel__timestamp" data-role="thread-timestamp" datetime=""></time>
+                </div>
+
+                <div class="thread-panel__config">
+                    <label class="thread-panel__model-field">
+                        <span>Model</span>
+                        <select name="model" data-action="select-model"></select>
+                    </label>
+
+                    <a class="thread-panel__link" href="../llm-config-platform/index.html">
+                        Open LLM Config Platform
+                    </a>
+
+                    <button type="button" aria-label="Minimize chat" data-action="minimize-thread">
+                        -
+                    </button>
+                </div>
+            </header>
+
+            <ol class="message-list" data-role="message-list"></ol>
+
+            <form class="composer" data-action="send-message">
+                <label class="visually-hidden" for="thread-message-input">Type your message</label>
+                <input
+                    id="thread-message-input"
+                    type="text"
+                    placeholder="Type your message here..."
+                    data-role="composer-input"
+                    autocomplete="off"
+                />
+                <button type="submit">Send</button>
+            </form>
+        </article>
+    </template>
 </body>
 
 </html>
