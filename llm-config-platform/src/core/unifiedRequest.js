@@ -1,6 +1,6 @@
 import { registry } from "./registry.js";
 import { validateConfig } from "../validation/validator.js";
-import { describeNormalization, isPlainObject } from "../utils/normalize.js";
+import { isPlainObject } from "../utils/normalize.js";
 import { deepClone } from "../utils/deepClone.js";
 
 export function buildUnifiedRequest(providerId, rawConfig) {
@@ -22,7 +22,6 @@ export function buildUnifiedRequest(providerId, rawConfig) {
 	}
 
 	const normalizedConfig = plugin.normalize(rawConfig);
-	const transformations = describeNormalization(plugin.fields, rawConfig, normalizedConfig);
 	const validation = validateConfig({ fields: plugin.fields }, normalizedConfig);
 
 	if (!validation.ok) {
@@ -30,19 +29,17 @@ export function buildUnifiedRequest(providerId, rawConfig) {
 			ok: false,
 			errors: validation.errors,
 			provider: providerId,
-			raw_config: deepClone(rawConfig),
+			user_entered_config: deepClone(rawConfig),
 			normalized_config: normalizedConfig,
-			transformations,
 		};
 	}
 
 	return {
 		ok: true,
 		provider: providerId,
-		raw_config: deepClone(rawConfig),
+		user_entered_config: deepClone(rawConfig),
 		normalized_config: normalizedConfig,
 		supported_features: deepClone(plugin.supported_features || {}),
-		provider_request: plugin.toRequest(normalizedConfig),
-		transformations,
+		what_will_be_sent: plugin.toRequest(normalizedConfig),
 	};
 }

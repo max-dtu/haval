@@ -138,11 +138,10 @@ function formatResult(result) {
 		{
 			ok: result.ok,
 			provider: result.provider,
-			raw_config: result.raw_config,
+			user_entered_config: result.user_entered_config,
 			normalized_config: result.normalized_config,
 			supported_features: result.supported_features,
-			transformations: result.transformations,
-			provider_request: result.provider_request,
+			what_will_be_sent: result.what_will_be_sent,
 		},
 		null,
 		2
@@ -174,11 +173,11 @@ export function mountModelPicker(target) {
 	});
 	const guidanceList = createElement("ul", { className: "model-picker__guidance-list" });
 	[
-		"`raw_config` shows exactly what you entered.",
+		"`ok` tells you whether the input was accepted and the result could be built successfully.",
+		"`user_entered_config` shows exactly what you entered.",
 		"`normalized_config` shows defaults and type normalization applied by the platform.",
 		"`supported_features` shows the platform's declared feature support for the selected provider.",
-		"`transformations` lists what was defaulted, normalized, or passed through untouched.",
-		"`provider_request` shows the final provider-specific payload that would be sent.",
+		"`what_will_be_sent` shows the final provider-specific payload that would be sent.",
 		"Extra provider-specific fields are preserved so you can keep full control over advanced options.",
 	].forEach((text) => {
 		guidanceList.appendChild(
@@ -195,7 +194,7 @@ export function mountModelPicker(target) {
 	});
 	const examples = createElement("pre", {
 		className: "model-picker__preview",
-		text: getProviderExamples().map((example) => JSON.stringify(example, null, 2)).join("\n\n"),
+		text: getProviderExamples().map((example) => JSON.stringify(example, null, 2)).join("\n\n\n\n\n\n\n\n"),
 	});
 	const textarea = createElement("textarea", {
 		className: "model-picker__textarea",
