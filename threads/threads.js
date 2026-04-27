@@ -1,13 +1,18 @@
 import { providerPlugins } from "../llm-config-platform/src/providers/catalog.js";
-
-const DB_NAME = "haval.threads.db";
-const DB_VERSION = 1;
-const STORE_THREADS = "threads";
-const STORE_MESSAGES = "messages";
-
-const STORAGE_KEY_THREADS_LEGACY = "haval.threads.v1";
-const STORAGE_KEY_MODELS = "haval.model-presets.v1";
-const STORAGE_KEY_UI = "haval.threads.ui.v1";
+import {
+  isIndexedDbSupported,
+  loadLegacyThreadsState,
+  loadModelPresetRecords,
+  loadThreadsFromIndexedDb,
+  loadUiState,
+  migrateLegacyLocalStorageToIndexedDb,
+  openThreadsDatabase,
+  saveLegacyThreadsState,
+  saveUiState,
+  upsertThreadRecord,
+  upsertThreadWithMessages,
+} from "./storage.js";
+import { renderThreadList, renderThreadPanels } from "./view.js";
 
 const UNTITLED_TITLE = "Untitled Thread";
 const READY_MESSAGE = "Ready when you are.";
@@ -46,13 +51,13 @@ async function initialize() {
   bindEvents();
   await hydrateState();
 
+  // Landing experience: start with no open thread columns.
   state.threads.forEach((thread) => {
     thread.isOpen = false;
   });
   state.activeThreadId = null;
 
   persistUiState();
-
   render();
 }
 
@@ -81,7 +86,7 @@ function bindEvents() {
   elements.searchInput.addEventListener("input", (event) => {
     state.query = event.target.value.trim();
     persistUiState();
-    renderThreadList();
+    render();
   });
 
   elements.threadList.addEventListener("click", (event) => {
@@ -227,170 +232,27 @@ function handleThreadStageSubmit(event) {
 
 function render() {
   sortThreadsByRecency();
-  renderThreadList();
-  renderThreadPanels();
-}
-
-function renderThreadList() {
   const filteredThreads = getFilteredThreads();
-  elements.threadList.textContent = "";
 
-  const fragment = document.createDocumentFragment();
-
-  filteredThreads.forEach((thread) => {
-    const item = document.createElement("li");
-    item.className = "thread-list__item";
-
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "thread-list__button";
-    button.dataset.action = "select-thread";
-    button.dataset.threadId = thread.id;
-
-    if (thread.id === state.activeThreadId) {
-      button.classList.add("thread-list__button--active");
-    }
-
-    if (thread.isOpen) {
-      button.classList.add("thread-list__button--open");
-    }
-
-    const titleRow = document.createElement("div");
-    titleRow.className = "thread-list__title-row";
-
-    const title = document.createElement("span");
-    title.className = "thread-list__title";
-    title.textContent = thread.title;
-
-    const time = document.createElement("time");
-    time.className = "thread-list__time";
-    time.dateTime = thread.updatedAt;
-    time.textContent = formatTimestamp(thread.updatedAt);
-
-    titleRow.append(title, time);
-
-    const snippet = document.createElement("span");
-    snippet.className = "thread-list__snippet";
-    snippet.textContent = getThreadSnippet(thread);
-
-    button.append(titleRow, snippet);
-    item.appendChild(button);
-    fragment.appendChild(item);
+  renderThreadList({
+    threadListNode: elements.threadList,
+    threadListEmptyNode: elements.threadListEmpty,
+    threads: filteredThreads,
+    allThreadCount: state.threads.length,
+    activeThreadId: state.activeThreadId,
+    getThreadSnippet,
   });
 
-  elements.threadList.appendChild(fragment);
-
-  const hasNoThreads = state.threads.length === 0;
-  const hasNoMatches = !hasNoThreads && filteredThreads.length === 0;
-
-  elements.threadListEmpty.hidden = !hasNoThreads && !hasNoMatches;
-
-  if (hasNoThreads) {
-    elements.threadListEmpty.textContent = "No threads yet. Click + to start.";
-  } else if (hasNoMatches) {
-    elements.threadListEmpty.textContent = "No threads match your search.";
-  }
-}
-
-function renderThreadPanels() {
-  const openThreads = state.threads.filter((thread) => thread.isOpen);
-  elements.threadStage.textContent = "";
-
-  if (!openThreads.length) {
-    elements.emptyState.hidden = false;
-    return;
-  }
-
-  elements.emptyState.hidden = true;
-
-  const fragment = document.createDocumentFragment();
-
-  openThreads.forEach((thread) => {
-    const panelFragment = elements.threadTemplate.content.cloneNode(true);
-    const panel = panelFragment.querySelector(".thread-panel");
-    const title = panelFragment.querySelector('[data-role="thread-title"]');
-    const timestamp = panelFragment.querySelector('[data-role="thread-timestamp"]');
-    const modelSelect = panelFragment.querySelector('select[data-action="select-model"]');
-    const modelField = panelFragment.querySelector(".thread-panel__model-field");
-    const messageList = panelFragment.querySelector('[data-role="message-list"]');
-    const composerLabel = panelFragment.querySelector('[data-role="composer-label"]');
-    const composerInput = panelFragment.querySelector('[data-role="composer-input"]');
-    const minimizeButton = panelFragment.querySelector('button[data-action="minimize-thread"]');
-
-    if (!panel || !title || !timestamp || !modelSelect || !modelField || !messageList || !composerInput || !minimizeButton) {
-      return;
-    }
-
-    panel.dataset.threadId = thread.id;
-    panel.dataset.state = "expanded";
-
-    if (thread.id === state.activeThreadId) {
-      panel.dataset.active = "true";
-    }
-
-    title.textContent = thread.title;
-
-    const firstMessage = thread.messages[0];
-    const startedAt = firstMessage?.createdAt || thread.createdAt;
-
-    timestamp.dateTime = startedAt;
-    timestamp.textContent = `Started ${formatTimestamp(startedAt)}`;
-
-    const selectedModel = getValidSelectedModel(thread.selectedModel);
-    thread.selectedModel = selectedModel;
-    populateModelSelect(modelSelect, selectedModel);
-    modelField.hidden = availableModels.length === 0;
-
-    const composerInputId = `thread-message-input-${thread.id}`;
-    composerInput.id = composerInputId;
-    if (composerLabel) {
-      composerLabel.htmlFor = composerInputId;
-    }
-
-    minimizeButton.textContent = "-";
-    minimizeButton.setAttribute("aria-label", "Minimize chat to sidebar");
-    minimizeButton.dataset.threadId = thread.id;
-
-    renderMessages(messageList, thread.messages);
-    fragment.appendChild(panelFragment);
+  renderThreadPanels({
+    threadStageNode: elements.threadStage,
+    emptyStateNode: elements.emptyState,
+    threadTemplate: elements.threadTemplate,
+    openThreads: state.threads.filter((thread) => thread.isOpen),
+    activeThreadId: state.activeThreadId,
+    availableModels,
+    getValidSelectedModel,
+    readyMessage: READY_MESSAGE,
   });
-
-  elements.threadStage.appendChild(fragment);
-}
-
-function renderMessages(listNode, messages) {
-  listNode.textContent = "";
-
-  if (!messages.length) {
-    const emptyMessage = document.createElement("li");
-    emptyMessage.className = "message-list__empty";
-    emptyMessage.textContent = READY_MESSAGE;
-    listNode.appendChild(emptyMessage);
-    return;
-  }
-
-  messages.forEach((message) => {
-    const item = document.createElement("li");
-    item.className = `message message--${message.role}`;
-
-    const role = document.createElement("p");
-    role.className = "message__role";
-    role.textContent = message.role === "user" ? "You" : "Assistant";
-
-    const content = document.createElement("p");
-    content.className = "message__content";
-    content.textContent = message.content;
-
-    const time = document.createElement("time");
-    time.className = "message__time";
-    time.dateTime = message.createdAt;
-    time.textContent = formatTimestamp(message.createdAt);
-
-    item.append(role, content, time);
-    listNode.appendChild(item);
-  });
-
-  listNode.scrollTop = listNode.scrollHeight;
 }
 
 async function hydrateState() {
@@ -407,8 +269,17 @@ async function hydrateState() {
 
   try {
     state.db = await openThreadsDatabase();
-    await migrateLegacyLocalStorageToIndexedDb(state.db);
-    state.threads = await loadThreadsFromIndexedDb(state.db);
+    const migratedActiveThreadId = await migrateLegacyLocalStorageToIndexedDb(
+      state.db,
+      sanitizeThread
+    );
+
+    if (!state.activeThreadId && isNonEmptyString(migratedActiveThreadId)) {
+      state.activeThreadId = migratedActiveThreadId;
+      persistUiState();
+    }
+
+    state.threads = await loadThreadsFromIndexedDb(state.db, sanitizeThread);
   } catch (error) {
     console.warn("IndexedDB unavailable, falling back to localStorage snapshot.", error);
     state.db = null;
@@ -417,8 +288,8 @@ async function hydrateState() {
 }
 
 function hydrateUiState() {
-  const uiState = safeReadStorage(STORAGE_KEY_UI);
-  if (!uiState || typeof uiState !== "object") {
+  const uiState = loadUiState();
+  if (!uiState) {
     return;
   }
 
@@ -432,8 +303,8 @@ function hydrateUiState() {
 }
 
 function hydrateLegacyThreadsState() {
-  const saved = safeReadStorage(STORAGE_KEY_THREADS_LEGACY);
-  if (!saved || typeof saved !== "object") {
+  const saved = loadLegacyThreadsState();
+  if (!saved) {
     return;
   }
 
@@ -444,50 +315,6 @@ function hydrateLegacyThreadsState() {
   if (!state.activeThreadId && isNonEmptyString(saved.activeThreadId)) {
     state.activeThreadId = saved.activeThreadId;
   }
-}
-
-async function loadThreadsFromIndexedDb(db) {
-  const threadRecords = await getAllThreadRecords(db);
-
-  const hydratedThreads = await Promise.all(
-    threadRecords.map(async (threadRecord) => {
-      const messageRecords = await getMessagesForThread(db, threadRecord.id);
-      return sanitizeThread({ ...threadRecord, messages: messageRecords });
-    })
-  );
-
-  return hydratedThreads.filter(Boolean);
-}
-
-async function migrateLegacyLocalStorageToIndexedDb(db) {
-  const legacyState = safeReadStorage(STORAGE_KEY_THREADS_LEGACY);
-  if (!legacyState || typeof legacyState !== "object") {
-    return;
-  }
-
-  const existingCount = await countStoreRecords(db, STORE_THREADS);
-  if (existingCount > 0) {
-    return;
-  }
-
-  const legacyThreads = Array.isArray(legacyState.threads) ? legacyState.threads : [];
-  const sanitizedThreads = legacyThreads.map((thread) => sanitizeThread(thread)).filter(Boolean);
-
-  if (!sanitizedThreads.length) {
-    window.localStorage.removeItem(STORAGE_KEY_THREADS_LEGACY);
-    return;
-  }
-
-  for (const thread of sanitizedThreads) {
-    await upsertThreadWithMessages(db, thread);
-  }
-
-  if (!state.activeThreadId && isNonEmptyString(legacyState.activeThreadId)) {
-    state.activeThreadId = legacyState.activeThreadId;
-    persistUiState();
-  }
-
-  window.localStorage.removeItem(STORAGE_KEY_THREADS_LEGACY);
 }
 
 function sanitizeThread(rawThread) {
@@ -533,7 +360,7 @@ function sanitizeMessages(rawMessages, fallbackDate) {
 }
 
 function persistUiState() {
-  safeWriteStorage(STORAGE_KEY_UI, {
+  saveUiState({
     activeThreadId: state.activeThreadId,
     query: state.query,
   });
@@ -571,17 +398,14 @@ function queueWrite(writeTask) {
 }
 
 function persistLegacyThreadsSnapshot() {
-  safeWriteStorage(STORAGE_KEY_THREADS_LEGACY, {
+  saveLegacyThreadsState({
     threads: state.threads,
     activeThreadId: state.activeThreadId,
   });
 }
 
 function readPersistedModelOptions() {
-  const saved = safeReadStorage(STORAGE_KEY_MODELS);
-  if (!Array.isArray(saved)) {
-    return [];
-  }
+  const saved = loadModelPresetRecords();
 
   return saved
     .flatMap((entry) => {
@@ -714,31 +538,9 @@ function dedupeModelOptions(options) {
   return [...map.values()];
 }
 
-function populateModelSelect(selectNode, selectedValue) {
-  selectNode.textContent = "";
-
-  if (!availableModels.length) {
-    const option = document.createElement("option");
-    option.value = "";
-    option.textContent = "No model presets available";
-    selectNode.appendChild(option);
-    selectNode.disabled = true;
-    return;
-  }
-
-  availableModels.forEach((optionData) => {
-    const option = document.createElement("option");
-    option.value = optionData.value;
-    option.textContent = optionData.label;
-    selectNode.appendChild(option);
-  });
-
-  selectNode.disabled = false;
-  selectNode.value = getValidSelectedModel(selectedValue);
-}
-
 function getValidSelectedModel(candidate) {
-  const hasCandidate = isNonEmptyString(candidate) && availableModels.some((option) => option.value === candidate);
+  const hasCandidate =
+    isNonEmptyString(candidate) && availableModels.some((option) => option.value === candidate);
   if (hasCandidate) {
     return candidate;
   }
@@ -753,7 +555,9 @@ function getFilteredThreads() {
   }
 
   return state.threads.filter((thread) => {
-    const searchText = [thread.title, thread.selectedModel, getThreadSnippet(thread)].join(" ").toLowerCase();
+    const searchText = [thread.title, thread.selectedModel, getThreadSnippet(thread)]
+      .join(" ")
+      .toLowerCase();
     return searchText.includes(query);
   });
 }
@@ -814,19 +618,6 @@ function buildThreadTitle(messageText) {
   return `${clean.slice(0, 39)}...`;
 }
 
-function formatTimestamp(value) {
-  if (!isValidDate(value)) {
-    return "";
-  }
-
-  return new Intl.DateTimeFormat(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(new Date(value));
-}
-
 function focusComposer(threadId = state.activeThreadId) {
   window.requestAnimationFrame(() => {
     const selector = threadId
@@ -839,27 +630,6 @@ function focusComposer(threadId = state.activeThreadId) {
 
     input.focus();
   });
-}
-
-function safeReadStorage(key) {
-  try {
-    const raw = window.localStorage.getItem(key);
-    if (!raw) {
-      return null;
-    }
-
-    return JSON.parse(raw);
-  } catch {
-    return null;
-  }
-}
-
-function safeWriteStorage(key, value) {
-  try {
-    window.localStorage.setItem(key, JSON.stringify(value));
-  } catch {
-    // Ignore write errors so the UI still works when storage is unavailable.
-  }
 }
 
 function createId(prefix) {
@@ -876,175 +646,4 @@ function isValidDate(value) {
 
 function isNonEmptyString(value) {
   return typeof value === "string" && value.trim().length > 0;
-}
-
-function isIndexedDbSupported() {
-  return typeof window !== "undefined" && "indexedDB" in window;
-}
-
-async function openThreadsDatabase() {
-  return new Promise((resolve, reject) => {
-    const request = window.indexedDB.open(DB_NAME, DB_VERSION);
-
-    request.onupgradeneeded = (event) => {
-      const db = event.target.result;
-
-      if (!db.objectStoreNames.contains(STORE_THREADS)) {
-        const threadStore = db.createObjectStore(STORE_THREADS, { keyPath: "id" });
-        threadStore.createIndex("updatedAt", "updatedAt", { unique: false });
-      }
-
-      if (!db.objectStoreNames.contains(STORE_MESSAGES)) {
-        const messageStore = db.createObjectStore(STORE_MESSAGES, { keyPath: "id" });
-        messageStore.createIndex("threadId", "threadId", { unique: false });
-        messageStore.createIndex("threadIdCreatedAt", ["threadId", "createdAt"], { unique: false });
-      }
-    };
-
-    request.onsuccess = () => {
-      resolve(request.result);
-    };
-
-    request.onerror = () => {
-      reject(request.error || new Error("Unable to open IndexedDB."));
-    };
-  });
-}
-
-async function getAllThreadRecords(db) {
-  const transaction = db.transaction(STORE_THREADS, "readonly");
-  const done = waitForTransaction(transaction);
-  const store = transaction.objectStore(STORE_THREADS);
-  const records = await requestToPromise(store.getAll());
-  await done;
-
-  const result = Array.isArray(records) ? records : [];
-  result.sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt));
-
-  return result;
-}
-
-async function getMessagesForThread(db, threadId) {
-  const transaction = db.transaction(STORE_MESSAGES, "readonly");
-  const done = waitForTransaction(transaction);
-  const store = transaction.objectStore(STORE_MESSAGES);
-  const threadIndex = store.index("threadId");
-  const records = await requestToPromise(threadIndex.getAll(IDBKeyRange.only(threadId)));
-  await done;
-
-  const result = Array.isArray(records) ? records : [];
-  result.sort((left, right) => Date.parse(left.createdAt) - Date.parse(right.createdAt));
-
-  return result;
-}
-
-async function countStoreRecords(db, storeName) {
-  const transaction = db.transaction(storeName, "readonly");
-  const done = waitForTransaction(transaction);
-  const store = transaction.objectStore(storeName);
-  const count = await requestToPromise(store.count());
-  await done;
-  return Number(count || 0);
-}
-
-async function upsertThreadRecord(db, thread) {
-  const transaction = db.transaction(STORE_THREADS, "readwrite");
-  const done = waitForTransaction(transaction);
-  const store = transaction.objectStore(STORE_THREADS);
-  store.put(toThreadRecord(thread));
-  await done;
-}
-
-async function upsertThreadWithMessages(db, thread) {
-  const transaction = db.transaction([STORE_THREADS, STORE_MESSAGES], "readwrite");
-  const done = waitForTransaction(transaction);
-
-  const threadStore = transaction.objectStore(STORE_THREADS);
-  const messageStore = transaction.objectStore(STORE_MESSAGES);
-
-  threadStore.put(toThreadRecord(thread));
-
-  await clearMessagesForThread(messageStore, thread.id);
-  thread.messages.forEach((message) => {
-    messageStore.put(toMessageRecord(message, thread.id));
-  });
-
-  await done;
-}
-
-function clearMessagesForThread(messageStore, threadId) {
-  return new Promise((resolve, reject) => {
-    const index = messageStore.index("threadId");
-    const request = index.openCursor(IDBKeyRange.only(threadId));
-
-    request.onerror = () => {
-      reject(request.error || new Error("Unable to read existing messages."));
-    };
-
-    request.onsuccess = (event) => {
-      const cursor = event.target.result;
-
-      if (!cursor) {
-        resolve();
-        return;
-      }
-
-      const deleteRequest = cursor.delete();
-      deleteRequest.onerror = () => {
-        reject(deleteRequest.error || new Error("Unable to remove old message."));
-      };
-      deleteRequest.onsuccess = () => {
-        cursor.continue();
-      };
-    };
-  });
-}
-
-function toThreadRecord(thread) {
-  return {
-    id: thread.id,
-    title: thread.title,
-    createdAt: thread.createdAt,
-    updatedAt: thread.updatedAt,
-    selectedModel: thread.selectedModel,
-    isOpen: thread.isOpen,
-  };
-}
-
-function toMessageRecord(message, threadId) {
-  return {
-    id: message.id,
-    threadId,
-    role: message.role,
-    content: message.content,
-    createdAt: message.createdAt,
-  };
-}
-
-function requestToPromise(request) {
-  return new Promise((resolve, reject) => {
-    request.onsuccess = () => {
-      resolve(request.result);
-    };
-
-    request.onerror = () => {
-      reject(request.error || new Error("IndexedDB request failed."));
-    };
-  });
-}
-
-function waitForTransaction(transaction) {
-  return new Promise((resolve, reject) => {
-    transaction.oncomplete = () => {
-      resolve();
-    };
-
-    transaction.onerror = () => {
-      reject(transaction.error || new Error("IndexedDB transaction failed."));
-    };
-
-    transaction.onabort = () => {
-      reject(transaction.error || new Error("IndexedDB transaction aborted."));
-    };
-  });
 }
