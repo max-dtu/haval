@@ -7,7 +7,7 @@
     <title>Talk to Models</title>
 
     <style>
-        .thread{
+        .thread {
             border: 2px solid green;
         }
     </style>
@@ -49,19 +49,15 @@
                 <h2 class="thread__title">Untitled Thread <!-- to be updated--></h2>
                 <time class="thread__timestamp" datetime=""><!-- the timestamp of the first message --></time>
 
+                <div class="thread__config">
+                    <select id="car-select" name="car">
+                        <!-- The previously selected models will be populated by JavaScript. if user never have selected a model, just hide as the user will have to click on /llm-config-platform/index.html-->
 
-                <form>
-                    <fieldset>
-                        <legend>chating with: model name or select </legend>
-                        <select id="car-select" name="car">
+                    </select>
 
-                            <!-- The previously selected models will be populated by JavaScript -->
+                    <a href="/llm-config-platform/index.html">LLM Config Platform</a>
 
-                        </select>
-                        <!-- if user never have selected a model -->
-                         <a href="/llm-config-platform/index.html">LLM Config Platform</a>
-                    </fieldset>
-                </form>
+                </div>
                 <button type="button" aria-label="Minimize chat" data-action="minimize-thread">
                     -
                 </button>
