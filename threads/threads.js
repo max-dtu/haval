@@ -1,8 +1,14 @@
-
 import { providerPlugins } from "../llm-config-platform/src/providers/catalog.js";
 
-const STORAGE_KEY_THREADS = "haval.threads.v1";
+const DB_NAME = "haval.threads.db";
+const DB_VERSION = 1;
+const STORE_THREADS = "threads";
+const STORE_MESSAGES = "messages";
+
+const STORAGE_KEY_THREADS_LEGACY = "haval.threads.v1";
 const STORAGE_KEY_MODELS = "haval.model-presets.v1";
+const STORAGE_KEY_UI = "haval.threads.ui.v1";
+
 const UNTITLED_TITLE = "Untitled Thread";
 const READY_MESSAGE = "Ready when you are.";
 
@@ -10,6 +16,7 @@ const state = {
   threads: [],
   activeThreadId: null,
   query: "",
+  db: null,
 };
 
 const elements = {
@@ -27,15 +34,17 @@ const fallbackModels = buildModelOptionsFromPlugins(providerPlugins);
 const persistedModels = readPersistedModelOptions();
 const availableModels = dedupeModelOptions([...persistedModels, ...fallbackModels]);
 
-initialize();
+let writeQueue = Promise.resolve();
 
-function initialize() {
+void initialize();
+
+async function initialize() {
   if (!hasRequiredElements()) {
     return;
   }
 
-  hydrateState();
   bindEvents();
+  await hydrateState();
 
   if (!state.threads.length) {
     createThread();
@@ -44,6 +53,7 @@ function initialize() {
 
   if (!findThreadById(state.activeThreadId)) {
     state.activeThreadId = state.threads[0].id;
+    persistUiState();
   }
 
   render();
@@ -73,6 +83,7 @@ function bindEvents() {
 
   elements.searchInput.addEventListener("input", (event) => {
     state.query = event.target.value.trim();
+    persistUiState();
     renderThreadList();
   });
 
@@ -88,7 +99,7 @@ function bindEvents() {
     }
 
     state.activeThreadId = threadId;
-    persistState();
+    persistUiState();
     render();
   });
 
@@ -111,7 +122,8 @@ function createThread() {
 
   state.threads.unshift(thread);
   state.activeThreadId = thread.id;
-  persistState();
+  persistUiState();
+  persistThreadAsync(thread, { syncMessages: true });
   render();
   focusComposer();
 }
@@ -129,7 +141,7 @@ function handleThreadStageClick(event) {
 
   if (button.dataset.action === "minimize-thread") {
     activeThread.minimized = !activeThread.minimized;
-    persistState();
+    persistThreadAsync(activeThread, { syncMessages: false });
     renderActiveThread();
   }
 }
@@ -147,8 +159,10 @@ function handleThreadStageChange(event) {
 
   activeThread.selectedModel = select.value;
   activeThread.updatedAt = new Date().toISOString();
-  persistState();
-  renderThreadList();
+  moveThreadToTop(activeThread.id);
+
+  persistThreadAsync(activeThread, { syncMessages: false });
+  render();
 }
 
 function handleThreadStageSubmit(event) {
@@ -186,7 +200,7 @@ function handleThreadStageSubmit(event) {
   }
 
   moveThreadToTop(activeThread.id);
-  persistState();
+  persistThreadAsync(activeThread, { syncMessages: true });
   render();
   focusComposer();
 }
@@ -309,7 +323,6 @@ function renderActiveThread() {
   }
 
   elements.threadStage.appendChild(fragment);
-  persistState();
 }
 
 function renderMessages(listNode, messages) {
@@ -347,18 +360,101 @@ function renderMessages(listNode, messages) {
   listNode.scrollTop = listNode.scrollHeight;
 }
 
-function hydrateState() {
-  const saved = safeReadStorage(STORAGE_KEY_THREADS);
+async function hydrateState() {
+  hydrateUiState();
+
+  if (state.query) {
+    elements.searchInput.value = state.query;
+  }
+
+  if (!isIndexedDbSupported()) {
+    hydrateLegacyThreadsState();
+    return;
+  }
+
+  try {
+    state.db = await openThreadsDatabase();
+    await migrateLegacyLocalStorageToIndexedDb(state.db);
+    state.threads = await loadThreadsFromIndexedDb(state.db);
+  } catch (error) {
+    console.warn("IndexedDB unavailable, falling back to localStorage snapshot.", error);
+    state.db = null;
+    hydrateLegacyThreadsState();
+  }
+}
+
+function hydrateUiState() {
+  const uiState = safeReadStorage(STORAGE_KEY_UI);
+  if (!uiState || typeof uiState !== "object") {
+    return;
+  }
+
+  if (isNonEmptyString(uiState.activeThreadId)) {
+    state.activeThreadId = uiState.activeThreadId;
+  }
+
+  if (isNonEmptyString(uiState.query)) {
+    state.query = uiState.query.trim();
+  }
+}
+
+function hydrateLegacyThreadsState() {
+  const saved = safeReadStorage(STORAGE_KEY_THREADS_LEGACY);
   if (!saved || typeof saved !== "object") {
     return;
   }
 
   const rawThreads = Array.isArray(saved.threads) ? saved.threads : [];
   state.threads = rawThreads.map((rawThread) => sanitizeThread(rawThread)).filter(Boolean);
+  sortThreadsByRecency();
 
-  if (typeof saved.activeThreadId === "string") {
+  if (!state.activeThreadId && isNonEmptyString(saved.activeThreadId)) {
     state.activeThreadId = saved.activeThreadId;
   }
+}
+
+async function loadThreadsFromIndexedDb(db) {
+  const threadRecords = await getAllThreadRecords(db);
+
+  const hydratedThreads = await Promise.all(
+    threadRecords.map(async (threadRecord) => {
+      const messageRecords = await getMessagesForThread(db, threadRecord.id);
+      return sanitizeThread({ ...threadRecord, messages: messageRecords });
+    })
+  );
+
+  return hydratedThreads.filter(Boolean);
+}
+
+async function migrateLegacyLocalStorageToIndexedDb(db) {
+  const legacyState = safeReadStorage(STORAGE_KEY_THREADS_LEGACY);
+  if (!legacyState || typeof legacyState !== "object") {
+    return;
+  }
+
+  const existingCount = await countStoreRecords(db, STORE_THREADS);
+  if (existingCount > 0) {
+    return;
+  }
+
+  const legacyThreads = Array.isArray(legacyState.threads) ? legacyState.threads : [];
+  const sanitizedThreads = legacyThreads.map((thread) => sanitizeThread(thread)).filter(Boolean);
+
+  if (!sanitizedThreads.length) {
+    window.localStorage.removeItem(STORAGE_KEY_THREADS_LEGACY);
+    return;
+  }
+
+  for (const thread of sanitizedThreads) {
+    await upsertThreadWithMessages(db, thread);
+  }
+
+  if (!state.activeThreadId && isNonEmptyString(legacyState.activeThreadId)) {
+    state.activeThreadId = legacyState.activeThreadId;
+    persistUiState();
+  }
+
+  window.localStorage.removeItem(STORAGE_KEY_THREADS_LEGACY);
 }
 
 function sanitizeThread(rawThread) {
@@ -403,8 +499,46 @@ function sanitizeMessages(rawMessages, fallbackDate) {
     .filter(Boolean);
 }
 
-function persistState() {
-  safeWriteStorage(STORAGE_KEY_THREADS, {
+function persistUiState() {
+  safeWriteStorage(STORAGE_KEY_UI, {
+    activeThreadId: state.activeThreadId,
+    query: state.query,
+  });
+}
+
+function persistThreadAsync(thread, options = { syncMessages: true }) {
+  if (!thread) {
+    return;
+  }
+
+  if (state.db) {
+    const { syncMessages } = options;
+
+    queueWrite(async () => {
+      if (syncMessages) {
+        await upsertThreadWithMessages(state.db, thread);
+      } else {
+        await upsertThreadRecord(state.db, thread);
+      }
+    });
+
+    return;
+  }
+
+  persistLegacyThreadsSnapshot();
+}
+
+function queueWrite(writeTask) {
+  writeQueue = writeQueue
+    .catch(() => undefined)
+    .then(writeTask)
+    .catch((error) => {
+      console.warn("Unable to persist thread update.", error);
+    });
+}
+
+function persistLegacyThreadsSnapshot() {
+  safeWriteStorage(STORAGE_KEY_THREADS_LEGACY, {
     threads: state.threads,
     activeThreadId: state.activeThreadId,
   });
@@ -586,10 +720,7 @@ function getFilteredThreads() {
   }
 
   return state.threads.filter((thread) => {
-    const searchText = [thread.title, thread.selectedModel, getThreadSnippet(thread)]
-      .join(" ")
-      .toLowerCase();
-
+    const searchText = [thread.title, thread.selectedModel, getThreadSnippet(thread)].join(" ").toLowerCase();
     return searchText.includes(query);
   });
 }
@@ -698,4 +829,175 @@ function isValidDate(value) {
 
 function isNonEmptyString(value) {
   return typeof value === "string" && value.trim().length > 0;
+}
+
+function isIndexedDbSupported() {
+  return typeof window !== "undefined" && "indexedDB" in window;
+}
+
+async function openThreadsDatabase() {
+  return new Promise((resolve, reject) => {
+    const request = window.indexedDB.open(DB_NAME, DB_VERSION);
+
+    request.onupgradeneeded = (event) => {
+      const db = event.target.result;
+
+      if (!db.objectStoreNames.contains(STORE_THREADS)) {
+        const threadStore = db.createObjectStore(STORE_THREADS, { keyPath: "id" });
+        threadStore.createIndex("updatedAt", "updatedAt", { unique: false });
+      }
+
+      if (!db.objectStoreNames.contains(STORE_MESSAGES)) {
+        const messageStore = db.createObjectStore(STORE_MESSAGES, { keyPath: "id" });
+        messageStore.createIndex("threadId", "threadId", { unique: false });
+        messageStore.createIndex("threadIdCreatedAt", ["threadId", "createdAt"], { unique: false });
+      }
+    };
+
+    request.onsuccess = () => {
+      resolve(request.result);
+    };
+
+    request.onerror = () => {
+      reject(request.error || new Error("Unable to open IndexedDB."));
+    };
+  });
+}
+
+async function getAllThreadRecords(db) {
+  const transaction = db.transaction(STORE_THREADS, "readonly");
+  const done = waitForTransaction(transaction);
+  const store = transaction.objectStore(STORE_THREADS);
+  const records = await requestToPromise(store.getAll());
+  await done;
+
+  const result = Array.isArray(records) ? records : [];
+  result.sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt));
+
+  return result;
+}
+
+async function getMessagesForThread(db, threadId) {
+  const transaction = db.transaction(STORE_MESSAGES, "readonly");
+  const done = waitForTransaction(transaction);
+  const store = transaction.objectStore(STORE_MESSAGES);
+  const threadIndex = store.index("threadId");
+  const records = await requestToPromise(threadIndex.getAll(IDBKeyRange.only(threadId)));
+  await done;
+
+  const result = Array.isArray(records) ? records : [];
+  result.sort((left, right) => Date.parse(left.createdAt) - Date.parse(right.createdAt));
+
+  return result;
+}
+
+async function countStoreRecords(db, storeName) {
+  const transaction = db.transaction(storeName, "readonly");
+  const done = waitForTransaction(transaction);
+  const store = transaction.objectStore(storeName);
+  const count = await requestToPromise(store.count());
+  await done;
+  return Number(count || 0);
+}
+
+async function upsertThreadRecord(db, thread) {
+  const transaction = db.transaction(STORE_THREADS, "readwrite");
+  const done = waitForTransaction(transaction);
+  const store = transaction.objectStore(STORE_THREADS);
+  store.put(toThreadRecord(thread));
+  await done;
+}
+
+async function upsertThreadWithMessages(db, thread) {
+  const transaction = db.transaction([STORE_THREADS, STORE_MESSAGES], "readwrite");
+  const done = waitForTransaction(transaction);
+
+  const threadStore = transaction.objectStore(STORE_THREADS);
+  const messageStore = transaction.objectStore(STORE_MESSAGES);
+
+  threadStore.put(toThreadRecord(thread));
+
+  await clearMessagesForThread(messageStore, thread.id);
+  thread.messages.forEach((message) => {
+    messageStore.put(toMessageRecord(message, thread.id));
+  });
+
+  await done;
+}
+
+function clearMessagesForThread(messageStore, threadId) {
+  return new Promise((resolve, reject) => {
+    const index = messageStore.index("threadId");
+    const request = index.openCursor(IDBKeyRange.only(threadId));
+
+    request.onerror = () => {
+      reject(request.error || new Error("Unable to read existing messages."));
+    };
+
+    request.onsuccess = (event) => {
+      const cursor = event.target.result;
+
+      if (!cursor) {
+        resolve();
+        return;
+      }
+
+      const deleteRequest = cursor.delete();
+      deleteRequest.onerror = () => {
+        reject(deleteRequest.error || new Error("Unable to remove old message."));
+      };
+      deleteRequest.onsuccess = () => {
+        cursor.continue();
+      };
+    };
+  });
+}
+
+function toThreadRecord(thread) {
+  return {
+    id: thread.id,
+    title: thread.title,
+    createdAt: thread.createdAt,
+    updatedAt: thread.updatedAt,
+    selectedModel: thread.selectedModel,
+    minimized: thread.minimized,
+  };
+}
+
+function toMessageRecord(message, threadId) {
+  return {
+    id: message.id,
+    threadId,
+    role: message.role,
+    content: message.content,
+    createdAt: message.createdAt,
+  };
+}
+
+function requestToPromise(request) {
+  return new Promise((resolve, reject) => {
+    request.onsuccess = () => {
+      resolve(request.result);
+    };
+
+    request.onerror = () => {
+      reject(request.error || new Error("IndexedDB request failed."));
+    };
+  });
+}
+
+function waitForTransaction(transaction) {
+  return new Promise((resolve, reject) => {
+    transaction.oncomplete = () => {
+      resolve();
+    };
+
+    transaction.onerror = () => {
+      reject(transaction.error || new Error("IndexedDB transaction failed."));
+    };
+
+    transaction.onabort = () => {
+      reject(transaction.error || new Error("IndexedDB transaction aborted."));
+    };
+  });
 }
