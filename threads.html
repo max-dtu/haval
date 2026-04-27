@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Talk to Models</title>
+    </head>
+
+    <body>
+        <aside class="sidebar sidebar--threads" data-state="open">
+            <header class="sidebar--threads__header">
+                <h2 class="sidebar--threads__title">Threads</h2>
+
+                <button
+                    type="button"
+                    aria-label="Start new chat"
+                    data-action="new-thread"
+                >
+                    +
+                </button>
+
+                <form role="search" data-action="search-threads">
+                    <label for="thread-search-input">Search threads</label>
+                    <input
+                        id="thread-search-input"
+                        type="search"
+                        data-action="search-threads"
+                    />
+                </form>
+            </header>
+
+            <nav class="sidebar--threads__nav" aria-label="Thread list">
+                <ul class="thread-list">
+                    <!-- thread items go here -->
+                    <!-- example:
+                    <li class="thread-list__item" data-thread-id="123"></li>
+                    -->
+                </ul>
+            </nav>
+        </aside>
+
+        <main class="main">
+            <h1 class="main__title">
+                From the sidebar, click + or select a previous chat
+            </h1>
+        </main>
+    </body>
+</html>
