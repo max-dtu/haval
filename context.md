@@ -33,3 +33,4 @@ Target elements using data-action not classes nor ids. id → accessibility (Anc
 Modular code (split into functions/modules)
 Event-driven design
 Avoid global scope pollution
+keep it minimal

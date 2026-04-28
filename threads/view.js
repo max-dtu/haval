@@ -13,6 +13,8 @@ export function renderThreadList({
   threads.forEach((thread) => {
     const item = document.createElement("li");
     item.className = "thread-list__item";
+    const itemRow = document.createElement("div");
+    itemRow.className = "thread-list__item-row";
 
     const button = document.createElement("button");
     button.type = "button";
@@ -46,8 +48,18 @@ export function renderThreadList({
     snippet.className = "thread-list__snippet";
     snippet.textContent = getThreadSnippet(thread);
 
+    const deleteButton = document.createElement("button");
+    deleteButton.type = "button";
+    deleteButton.className = "thread-list__delete";
+    deleteButton.dataset.action = "delete-thread";
+    deleteButton.dataset.threadId = thread.id;
+    deleteButton.setAttribute("aria-label", `Delete thread ${thread.title}`);
+    deleteButton.title = "Delete thread";
+    deleteButton.textContent = "x";
+
     button.append(titleRow, snippet);
-    item.appendChild(button);
+    itemRow.append(button, deleteButton);
+    item.appendChild(itemRow);
     fragment.appendChild(item);
   });
 
@@ -93,6 +105,7 @@ export function renderThreadPanels({
     const timestamp = panelFragment.querySelector('[data-role="thread-timestamp"]');
     const modelSelect = panelFragment.querySelector('select[data-action="select-model"]');
     const modelField = panelFragment.querySelector(".thread-panel__model-field");
+    const configLink = panelFragment.querySelector('.thread-panel__link');
     const messageList = panelFragment.querySelector('[data-role="message-list"]');
     const composerLabel = panelFragment.querySelector('[data-role="composer-label"]');
     const composerInput = panelFragment.querySelector('[data-role="composer-input"]');
@@ -104,6 +117,7 @@ export function renderThreadPanels({
       !timestamp ||
       !modelSelect ||
       !modelField ||
+      !configLink ||
       !messageList ||
       !composerInput ||
       !minimizeButton

@@ -14,7 +14,6 @@
     --accent-strong: #05624d;
     --bubble-assistant: #eef7f3;
     --bubble-user: #d8efe6;
-    --danger: #b9393f;
     --shadow-soft: 0 12px 28px rgba(8, 38, 30, 0.1);
     --shadow-hard: 0 16px 30px rgba(8, 38, 30, 0.14);
     --radius-lg: 18px;
@@ -145,20 +144,11 @@ body {
     overflow: auto;
 }
 
-.thread-list__item {
-    animation: thread-enter 0.24s ease both;
-}
-
-.thread-list__item:nth-child(1) {
-    animation-delay: 0.03s;
-}
-
-.thread-list__item:nth-child(2) {
-    animation-delay: 0.06s;
-}
-
-.thread-list__item:nth-child(3) {
-    animation-delay: 0.09s;
+.thread-list__item-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.4rem;
+    align-items: stretch;
 }
 
 .thread-list__button {
@@ -194,6 +184,30 @@ body {
 
 .thread-list__button--open {
     border-color: #9dc9b9;
+}
+
+.thread-list__delete {
+    width: 2rem;
+    border: 1px solid #e2bcbc;
+    border-radius: var(--radius-md);
+    background: #fff8f8;
+    color: #8f2323;
+    font-size: 1rem;
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+    transition: border-color 0.18s ease, color 0.18s ease, background-color 0.18s ease;
+}
+
+.thread-list__delete:hover {
+    border-color: #d39999;
+    color: #9e2828;
+    background: #fff4f4;
+}
+
+.thread-list__delete:focus-visible {
+    outline: 2px solid #9e2828;
+    outline-offset: 2px;
 }
 
 .thread-list__title-row {
@@ -244,19 +258,12 @@ body {
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-soft);
     padding: 2.3rem 2rem;
-    animation: panel-enter 0.3s ease both;
 }
 
 .empty-state__title {
     margin: 0;
     font-size: 1.8rem;
     letter-spacing: 0.02em;
-}
-
-.empty-state__copy {
-    margin: 0.8rem 0 0;
-    color: var(--muted);
-    line-height: 1.6;
 }
 
 .thread-stage {
@@ -277,11 +284,6 @@ body {
     display: flex;
     flex-direction: column;
     gap: 1rem;
-    animation: panel-enter 0.32s ease both;
-}
-
-.thread-panel[data-state="collapsed"] {
-    gap: 0;
 }
 
 .thread-panel__header {
@@ -332,6 +334,12 @@ body {
 }
 
 .thread-panel__link {
+    appearance: none;
+    border: 0;
+    background: none;
+    padding: 0;
+    cursor: pointer;
+    font: inherit;
     color: var(--accent-strong);
     text-decoration: none;
     border-bottom: 1px solid transparent;
@@ -340,6 +348,11 @@ body {
 
 .thread-panel__link:hover {
     border-bottom-color: currentcolor;
+}
+
+.thread-panel__link:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
 }
 
 .thread-panel__config button[data-action="minimize-thread"] {
@@ -379,7 +392,6 @@ body {
     border: 1px solid var(--border);
     padding: 0.62rem 0.75rem;
     box-shadow: 0 2px 8px rgba(23, 50, 41, 0.06);
-    animation: message-enter 0.2s ease both;
 }
 
 .message--assistant {
@@ -461,42 +473,6 @@ body {
     border: 0;
 }
 
-@keyframes thread-enter {
-    from {
-        opacity: 0;
-        transform: translateY(4px);
-    }
-
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-@keyframes panel-enter {
-    from {
-        opacity: 0;
-        transform: translateY(8px);
-    }
-
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-@keyframes message-enter {
-    from {
-        opacity: 0;
-        transform: translateX(-4px);
-    }
-
-    to {
-        opacity: 1;
-        transform: translateX(0);
-    }
-}
-
 @media (max-width: 980px) {
     .layout {
         grid-template-columns: 1fr;
@@ -551,5 +527,90 @@ body {
 
     .composer button {
         width: 100%;
+    }
+}
+
+.config-dialog {
+    position: fixed;
+    inset: 2rem;
+    margin: 0;
+    width: auto;
+    height: auto;
+    max-width: none;
+    max-height: none;
+    min-width: 0;
+    min-height: 0;
+    padding: 0;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+    display: none;
+    grid-template-rows: auto minmax(0, 1fr);
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+.config-dialog[open] {
+    display: grid;
+}
+
+.config-dialog::backdrop {
+    background-color: rgba(0, 0, 0, 0.4);
+}
+
+.config-dialog__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 24px;
+    border-bottom: 1px solid #e0e0e0;
+    flex-shrink: 0;
+}
+
+.config-dialog__title {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+}
+
+.config-dialog__close {
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    padding: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+}
+
+.config-dialog__close:hover {
+    background-color: #f0f0f0;
+}
+
+.config-dialog__close:focus {
+    outline: 2px solid #0066cc;
+    outline-offset: 2px;
+}
+
+.config-dialog__iframe {
+    display: block;
+    grid-row: 2;
+    border: none;
+    border-radius: 0;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+}
+
+@media (max-width: 640px) {
+    .config-dialog {
+        inset: 0.5rem;
+        border-radius: 12px;
     }
 }

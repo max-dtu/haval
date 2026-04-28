@@ -148,11 +148,21 @@ function formatResult(result) {
 	);
 }
 
+function getThreadContextFromUrl() {
+	const params = new URLSearchParams(window.location.search);
+	return {
+		threadId: params.get("thread") || "",
+		selectedModel: params.get("selected") || "",
+	};
+}
+
 export function mountModelPicker(target) {
 	const container = typeof target === "string" ? document.querySelector(target) : target;
 	if (!container) {
 		throw new Error("mountModelPicker target not found");
 	}
+
+	const { threadId, selectedModel } = getThreadContextFromUrl();
 
 	const providers = registry.list().map((plugin) => plugin.id).join(", ");
 
@@ -160,12 +170,20 @@ export function mountModelPicker(target) {
 	const fieldset = createElement("fieldset", { className: "model-picker__fieldset" });
 	const legend = createElement("legend", {
 		className: "model-picker__legend",
-		text: "JSON Config Input",
+		text: threadId ? `JSON Config Input for: ${threadId}` : "JSON Config Input",
 	});
 	const helper = createElement("p", {
 		className: "model-picker__description",
 		text: `Set provider and config in JSON. Known fields are normalized, extra provider-specific fields are preserved and passed through. Available providers: ${providers}`,
 	});
+	const threadContext = threadId
+		? createElement("p", {
+			className: "model-picker__description",
+			text: selectedModel
+				? `This configuration belongs to thread ${threadId}. Selected model: ${selectedModel}.`
+				: `This configuration belongs to thread ${threadId}.`,
+		})
+		: null;
 	const guidance = createElement("div", { className: "model-picker__guidance" });
 	const guidanceTitle = createElement("p", {
 		className: "model-picker__guidance-title",
@@ -216,7 +234,11 @@ export function mountModelPicker(target) {
 
 	textarea.value = JSON.stringify(getInitialPayload(), null, 2);
 
-	fieldset.append(legend, helper, guidance, examplesTitle, examples, textarea, status, preview, submit);
+	if (threadContext) {
+		fieldset.append(legend, helper, threadContext, guidance, examplesTitle, examples, textarea, status, preview, submit);
+	} else {
+		fieldset.append(legend, helper, guidance, examplesTitle, examples, textarea, status, preview, submit);
+	}
 	form.append(fieldset);
 	clearNode(container);
 	container.appendChild(form);

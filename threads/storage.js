@@ -5,19 +5,9 @@ const STORE_MESSAGES = "messages";
 
 const STORAGE_KEY_THREADS_LEGACY = "haval.threads.v1";
 const STORAGE_KEY_MODELS = "haval.model-presets.v1";
-const STORAGE_KEY_UI = "haval.threads.ui.v1";
 
 export function isIndexedDbSupported() {
   return typeof window !== "undefined" && "indexedDB" in window;
-}
-
-export function loadUiState() {
-  const uiState = readStorageJson(STORAGE_KEY_UI);
-  return uiState && typeof uiState === "object" ? uiState : null;
-}
-
-export function saveUiState(uiState) {
-  writeStorageJson(STORAGE_KEY_UI, uiState);
 }
 
 export function loadLegacyThreadsState() {
@@ -110,14 +100,6 @@ export async function migrateLegacyLocalStorageToIndexedDb(db, sanitizeThread) {
   return typeof legacyState.activeThreadId === "string" ? legacyState.activeThreadId : null;
 }
 
-export async function upsertThreadRecord(db, thread) {
-  const transaction = db.transaction(STORE_THREADS, "readwrite");
-  const done = waitForTransaction(transaction);
-  const store = transaction.objectStore(STORE_THREADS);
-  store.put(toThreadRecord(thread));
-  await done;
-}
-
 export async function upsertThreadWithMessages(db, thread) {
   const transaction = db.transaction([STORE_THREADS, STORE_MESSAGES], "readwrite");
   const done = waitForTransaction(transaction);
@@ -131,6 +113,19 @@ export async function upsertThreadWithMessages(db, thread) {
   thread.messages.forEach((message) => {
     messageStore.put(toMessageRecord(message, thread.id));
   });
+
+  await done;
+}
+
+export async function deleteThreadWithMessages(db, threadId) {
+  const transaction = db.transaction([STORE_THREADS, STORE_MESSAGES], "readwrite");
+  const done = waitForTransaction(transaction);
+
+  const threadStore = transaction.objectStore(STORE_THREADS);
+  const messageStore = transaction.objectStore(STORE_MESSAGES);
+
+  threadStore.delete(threadId);
+  await clearMessagesForThread(messageStore, threadId);
 
   await done;
 }

@@ -1,649 +1,376 @@
-import { providerPlugins } from "../llm-config-platform/src/providers/catalog.js";
+
 import {
-  isIndexedDbSupported,
-  loadLegacyThreadsState,
+  deleteThreadWithMessages,
   loadModelPresetRecords,
   loadThreadsFromIndexedDb,
-  loadUiState,
   migrateLegacyLocalStorageToIndexedDb,
   openThreadsDatabase,
-  saveLegacyThreadsState,
-  saveUiState,
-  upsertThreadRecord,
   upsertThreadWithMessages,
 } from "./storage.js";
+import {
+  buildAvailableModels,
+  createThreadSanitizer,
+  filterThreads,
+  getClosestEventTarget,
+  getThreadSnippet,
+  makeId,
+  nowIso,
+  shouldPersistThread,
+} from "./threadHelpers.js";
 import { renderThreadList, renderThreadPanels } from "./view.js";
 
-const UNTITLED_TITLE = "Untitled Thread";
-const READY_MESSAGE = "Ready when you are.";
-
-const state = {
-  threads: [],
-  activeThreadId: null,
-  query: "",
-  db: null,
-};
+const READY_MESSAGE = "Send a message to start this thread.";
 
 const elements = {
   newThreadButton: document.querySelector('button[data-action="new-thread"]'),
-  searchForm: document.querySelector('form[data-action="search-threads"]'),
   searchInput: document.querySelector('[data-role="thread-search-input"]'),
-  threadList: document.querySelector('[data-role="thread-list"]'),
-  threadListEmpty: document.querySelector('[data-role="thread-list-empty"]'),
-  emptyState: document.querySelector('[data-role="empty-state"]'),
-  threadStage: document.querySelector('[data-role="thread-stage"]'),
+  threadListNode: document.querySelector('[data-role="thread-list"]'),
+  threadListEmptyNode: document.querySelector('[data-role="thread-list-empty"]'),
+  threadStageNode: document.querySelector('[data-role="thread-stage"]'),
+  emptyStateNode: document.querySelector('[data-role="empty-state"]'),
   threadTemplate: document.querySelector("#thread"),
+  configDialog: document.querySelector('[data-role="config-dialog"]'),
+  configIframe: document.querySelector('[data-role="config-iframe"]'),
+  closeConfigButton: document.querySelector('button[data-action="close-config-dialog"]'),
 };
 
-const fallbackModels = buildModelOptionsFromPlugins(providerPlugins);
-const persistedModels = readPersistedModelOptions();
-const availableModels = dedupeModelOptions([...persistedModels, ...fallbackModels]);
+const state = {
+  db: null,
+  threads: [],
+  activeThreadId: null,
+  searchQuery: "",
+  availableModels: buildAvailableModels(loadModelPresetRecords()),
+};
+const sanitizeThread = createThreadSanitizer(getValidSelectedModel);
 
-let writeQueue = Promise.resolve();
+init();
 
-void initialize();
-
-async function initialize() {
-  if (!hasRequiredElements()) {
-    return;
-  }
-
+async function init() {
   bindEvents();
-  await hydrateState();
-
-  // Landing experience: start with no open thread columns.
-  state.threads.forEach((thread) => {
-    thread.isOpen = false;
-  });
-  state.activeThreadId = null;
-
-  persistUiState();
+  await hydrateThreads();
   render();
-}
-
-function hasRequiredElements() {
-  return Boolean(
-    elements.newThreadButton &&
-      elements.searchForm &&
-      elements.searchInput &&
-      elements.threadList &&
-      elements.threadListEmpty &&
-      elements.emptyState &&
-      elements.threadStage &&
-      elements.threadTemplate
-  );
 }
 
 function bindEvents() {
-  elements.newThreadButton.addEventListener("click", () => {
-    createThread();
-  });
-
-  elements.searchForm.addEventListener("submit", (event) => {
-    event.preventDefault();
-  });
-
-  elements.searchInput.addEventListener("input", (event) => {
-    state.query = event.target.value.trim();
-    persistUiState();
-    render();
-  });
-
-  elements.threadList.addEventListener("click", (event) => {
-    const button = event.target.closest('button[data-action="select-thread"]');
-    if (!button) {
-      return;
-    }
-
-    const { threadId } = button.dataset;
-    if (!threadId) {
-      return;
-    }
-
-    const thread = findThreadById(threadId);
-    if (!thread) {
-      return;
-    }
-
-    if (!thread.isOpen) {
-      thread.isOpen = true;
-      persistThreadAsync(thread, { syncMessages: false });
-    }
-
-    state.activeThreadId = threadId;
-    persistUiState();
-    render();
-    focusComposer(threadId);
-  });
-
-  elements.threadStage.addEventListener("click", handleThreadStageClick);
-  elements.threadStage.addEventListener("change", handleThreadStageChange);
-  elements.threadStage.addEventListener("submit", handleThreadStageSubmit);
+  elements.newThreadButton?.addEventListener("click", handleNewThread);
+  elements.searchInput?.addEventListener("input", handleSearchInput);
+  elements.threadListNode?.addEventListener("click", handleThreadListClick);
+  elements.threadStageNode?.addEventListener("click", handleThreadStageClick);
+  elements.threadStageNode?.addEventListener("change", handleThreadStageChange);
+  elements.threadStageNode?.addEventListener("submit", handleThreadStageSubmit);
+  elements.closeConfigButton?.addEventListener("click", handleCloseConfig);
 }
 
-function createThread() {
-  const now = new Date().toISOString();
-  const thread = {
-    id: createId("thread"),
-    title: UNTITLED_TITLE,
-    createdAt: now,
-    updatedAt: now,
-    selectedModel: availableModels[0]?.value || "",
-    isOpen: true,
-    messages: [buildMessage("assistant", READY_MESSAGE, now)],
-  };
+async function hydrateThreads() {
+  try {
+    state.db = await openThreadsDatabase();
 
-  state.threads.unshift(thread);
-  state.activeThreadId = thread.id;
-  persistUiState();
-  persistThreadAsync(thread, { syncMessages: true });
-  render();
-  focusComposer(thread.id);
-}
-
-function handleThreadStageClick(event) {
-  const button = event.target.closest('button[data-action="minimize-thread"]');
-  if (!button) {
-    return;
-  }
-
-  const thread = getThreadFromEventTarget(button);
-  if (!thread) {
-    return;
-  }
-
-  thread.isOpen = false;
-
-  if (state.activeThreadId === thread.id) {
-    const nextOpenThread = state.threads.find(
-      (candidate) => candidate.id !== thread.id && candidate.isOpen
+    const migratedActiveThreadId = await migrateLegacyLocalStorageToIndexedDb(
+      state.db,
+      sanitizeThread
     );
-    state.activeThreadId = nextOpenThread?.id || null;
+
+    const hydratedThreads = await loadThreadsFromIndexedDb(state.db, sanitizeThread);
+    const emptyThreadIds = hydratedThreads
+      .filter((thread) => !shouldPersistThread(thread))
+      .map((thread) => thread.id);
+
+    if (emptyThreadIds.length) {
+      await Promise.all(
+        emptyThreadIds.map(async (threadId) => {
+          try {
+            await deleteThreadWithMessages(state.db, threadId);
+          } catch {
+            // Keep hydration resilient even if one cleanup delete fails.
+          }
+        })
+      );
+    }
+
+    state.threads = hydratedThreads.filter((thread) => shouldPersistThread(thread));
+    state.activeThreadId = pickExistingThreadId(migratedActiveThreadId);
+  } catch {
+    state.db = null;
+    state.threads = [];
+    state.activeThreadId = null;
   }
-
-  persistUiState();
-  persistThreadAsync(thread, { syncMessages: false });
-  render();
-}
-
-function handleThreadStageChange(event) {
-  const select = event.target.closest('select[data-action="select-model"]');
-  if (!select) {
-    return;
-  }
-
-  const thread = getThreadFromEventTarget(select);
-  if (!thread) {
-    return;
-  }
-
-  thread.selectedModel = select.value;
-  thread.updatedAt = new Date().toISOString();
-  moveThreadToTop(thread.id);
-  state.activeThreadId = thread.id;
-
-  persistUiState();
-  persistThreadAsync(thread, { syncMessages: false });
-  render();
-}
-
-function handleThreadStageSubmit(event) {
-  const form = event.target.closest('form[data-action="send-message"]');
-  if (!form) {
-    return;
-  }
-
-  event.preventDefault();
-
-  const input = form.querySelector('[data-role="composer-input"]');
-  if (!input) {
-    return;
-  }
-
-  const messageText = input.value.trim();
-  if (!messageText) {
-    return;
-  }
-
-  const thread = getThreadFromEventTarget(form);
-  if (!thread) {
-    return;
-  }
-
-  input.value = "";
-
-  const now = new Date().toISOString();
-  thread.messages.push(buildMessage("user", messageText, now));
-  thread.updatedAt = now;
-  thread.isOpen = true;
-
-  if (thread.title === UNTITLED_TITLE) {
-    thread.title = buildThreadTitle(messageText);
-  }
-
-  moveThreadToTop(thread.id);
-  state.activeThreadId = thread.id;
-
-  persistUiState();
-  persistThreadAsync(thread, { syncMessages: true });
-  render();
-  focusComposer(thread.id);
 }
 
 function render() {
-  sortThreadsByRecency();
-  const filteredThreads = getFilteredThreads();
+  if (
+    !elements.threadListNode ||
+    !elements.threadListEmptyNode ||
+    !elements.threadStageNode ||
+    !elements.emptyStateNode ||
+    !elements.threadTemplate
+  ) {
+    return;
+  }
+
+  const visibleThreads = filterThreads(state.threads, state.searchQuery);
 
   renderThreadList({
-    threadListNode: elements.threadList,
-    threadListEmptyNode: elements.threadListEmpty,
-    threads: filteredThreads,
+    threadListNode: elements.threadListNode,
+    threadListEmptyNode: elements.threadListEmptyNode,
+    threads: visibleThreads,
     allThreadCount: state.threads.length,
     activeThreadId: state.activeThreadId,
     getThreadSnippet,
   });
 
   renderThreadPanels({
-    threadStageNode: elements.threadStage,
-    emptyStateNode: elements.emptyState,
+    threadStageNode: elements.threadStageNode,
+    emptyStateNode: elements.emptyStateNode,
     threadTemplate: elements.threadTemplate,
     openThreads: state.threads.filter((thread) => thread.isOpen),
     activeThreadId: state.activeThreadId,
-    availableModels,
+    availableModels: state.availableModels,
     getValidSelectedModel,
     readyMessage: READY_MESSAGE,
   });
 }
 
-async function hydrateState() {
-  hydrateUiState();
-
-  if (state.query) {
-    elements.searchInput.value = state.query;
-  }
-
-  if (!isIndexedDbSupported()) {
-    hydrateLegacyThreadsState();
-    return;
-  }
-
-  try {
-    state.db = await openThreadsDatabase();
-    const migratedActiveThreadId = await migrateLegacyLocalStorageToIndexedDb(
-      state.db,
-      sanitizeThread
-    );
-
-    if (!state.activeThreadId && isNonEmptyString(migratedActiveThreadId)) {
-      state.activeThreadId = migratedActiveThreadId;
-      persistUiState();
-    }
-
-    state.threads = await loadThreadsFromIndexedDb(state.db, sanitizeThread);
-  } catch (error) {
-    console.warn("IndexedDB unavailable, falling back to localStorage snapshot.", error);
-    state.db = null;
-    hydrateLegacyThreadsState();
-  }
+function handleSearchInput(event) {
+  state.searchQuery = typeof event.target?.value === "string" ? event.target.value : "";
+  render();
 }
 
-function hydrateUiState() {
-  const uiState = loadUiState();
-  if (!uiState) {
-    return;
-  }
-
-  if (isNonEmptyString(uiState.activeThreadId)) {
-    state.activeThreadId = uiState.activeThreadId;
-  }
-
-  if (isNonEmptyString(uiState.query)) {
-    state.query = uiState.query.trim();
-  }
-}
-
-function hydrateLegacyThreadsState() {
-  const saved = loadLegacyThreadsState();
-  if (!saved) {
-    return;
-  }
-
-  const rawThreads = Array.isArray(saved.threads) ? saved.threads : [];
-  state.threads = rawThreads.map((rawThread) => sanitizeThread(rawThread)).filter(Boolean);
-  sortThreadsByRecency();
-
-  if (!state.activeThreadId && isNonEmptyString(saved.activeThreadId)) {
-    state.activeThreadId = saved.activeThreadId;
-  }
-}
-
-function sanitizeThread(rawThread) {
-  if (!rawThread || typeof rawThread !== "object") {
-    return null;
-  }
-
-  const createdAt = isValidDate(rawThread.createdAt) ? rawThread.createdAt : new Date().toISOString();
-  const messages = sanitizeMessages(rawThread.messages, createdAt);
-
-  return {
-    id: isNonEmptyString(rawThread.id) ? rawThread.id : createId("thread"),
-    title: isNonEmptyString(rawThread.title) ? rawThread.title : UNTITLED_TITLE,
-    createdAt,
-    updatedAt: isValidDate(rawThread.updatedAt) ? rawThread.updatedAt : createdAt,
-    selectedModel: getValidSelectedModel(rawThread.selectedModel),
-    isOpen: typeof rawThread.isOpen === "boolean" ? rawThread.isOpen : false,
-    messages: messages.length ? messages : [buildMessage("assistant", READY_MESSAGE, createdAt)],
+function handleNewThread() {
+  const timestamp = nowIso();
+  const threadId = makeId();
+  const nextThread = {
+    id: threadId,
+    title: `Thread ${state.threads.length + 1}`,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    selectedModel: getValidSelectedModel(""),
+    messages: [],
+    isOpen: true,
   };
+
+  state.threads = [nextThread, ...state.threads];
+  state.activeThreadId = nextThread.id;
+  render();
 }
 
-function sanitizeMessages(rawMessages, fallbackDate) {
-  if (!Array.isArray(rawMessages)) {
-    return [];
+function handleThreadListClick(event) {
+  const deleteButton = getClosestEventTarget(event.target, 'button[data-action="delete-thread"]');
+  if (deleteButton) {
+    event.preventDefault();
+    event.stopPropagation();
+    void removeThread(deleteButton.dataset.threadId);
+    return;
   }
 
-  return rawMessages
-    .filter((rawMessage) => rawMessage && typeof rawMessage === "object")
-    .map((rawMessage) => {
-      const content = isNonEmptyString(rawMessage.content) ? rawMessage.content.trim() : "";
-      if (!content) {
-        return null;
-      }
+  const selectButton = getClosestEventTarget(event.target, 'button[data-action="select-thread"]');
+  if (!selectButton) {
+    return;
+  }
 
-      return {
-        id: isNonEmptyString(rawMessage.id) ? rawMessage.id : createId("msg"),
-        role: rawMessage.role === "user" ? "user" : "assistant",
-        content,
-        createdAt: isValidDate(rawMessage.createdAt) ? rawMessage.createdAt : fallbackDate,
-      };
-    })
-    .filter(Boolean);
-}
-
-function persistUiState() {
-  saveUiState({
-    activeThreadId: state.activeThreadId,
-    query: state.query,
-  });
-}
-
-function persistThreadAsync(thread, options = { syncMessages: true }) {
+  const thread = getThreadById(selectButton.dataset.threadId);
   if (!thread) {
     return;
   }
 
-  if (state.db) {
-    const { syncMessages } = options;
+  thread.isOpen = true;
+  state.activeThreadId = thread.id;
+  void persistThread(thread);
+  render();
+}
 
-    queueWrite(async () => {
-      if (syncMessages) {
-        await upsertThreadWithMessages(state.db, thread);
-      } else {
-        await upsertThreadRecord(state.db, thread);
-      }
-    });
-
+function handleThreadStageClick(event) {
+  const openConfigContext = getStageContext(event.target, 'button[data-action="open-config"]');
+  if (openConfigContext) {
+    openThreadConfig(openConfigContext.thread);
     return;
   }
 
-  persistLegacyThreadsSnapshot();
+  const stageContext = getStageContext(event.target, 'button[data-action="minimize-thread"]');
+  if (!stageContext) {
+    return;
+  }
+  const { thread } = stageContext;
+
+  thread.isOpen = false;
+  if (state.activeThreadId === thread.id) {
+    state.activeThreadId = state.threads.find((item) => item.isOpen)?.id || null;
+  }
+
+  void persistThread(thread);
+  render();
 }
 
-function queueWrite(writeTask) {
-  writeQueue = writeQueue
-    .catch(() => undefined)
-    .then(writeTask)
-    .catch((error) => {
-      console.warn("Unable to persist thread update.", error);
-    });
+function handleThreadStageChange(event) {
+  const stageContext = getStageContext(event.target, 'select[data-action="select-model"]');
+  if (!stageContext) {
+    return;
+  }
+  const { control, thread } = stageContext;
+  thread.selectedModel = getValidSelectedModel(control.value);
+  thread.updatedAt = nowIso();
+  void persistThread(thread);
+  render();
 }
 
-function persistLegacyThreadsSnapshot() {
-  saveLegacyThreadsState({
-    threads: state.threads,
-    activeThreadId: state.activeThreadId,
+function handleThreadStageSubmit(event) {
+  const stageContext = getStageContext(event.target, 'form[data-action="send-message"]');
+  if (!stageContext) {
+    return;
+  }
+  event.preventDefault();
+  const { control: form, thread } = stageContext;
+
+  const input = form.querySelector('[data-role="composer-input"]');
+  const content = typeof input?.value === "string" ? input.value.trim() : "";
+  if (!content) {
+    return;
+  }
+
+  thread.messages.push({
+    id: makeId(),
+    role: "user",
+    content,
+    createdAt: nowIso(),
+  });
+  thread.updatedAt = nowIso();
+  thread.isOpen = true;
+  state.activeThreadId = thread.id;
+
+  if (input) {
+    input.value = "";
+    input.disabled = true;  // Prevent duplicate sends while persisting
+  }
+
+  render();
+
+  // Ensure persistence completes before re-enabling input
+  persistThread(thread).then(() => {
+    if (input) {
+      input.disabled = false;
+    }
+  }).catch((error) => {
+    // On error, restore input value so user doesn't lose their message
+    if (input) {
+      input.value = content;
+      input.disabled = false;
+    }
+    console.error("Failed to save message:", error);
   });
 }
 
-function readPersistedModelOptions() {
-  const saved = loadModelPresetRecords();
-
-  return saved
-    .flatMap((entry) => {
-      if (typeof entry === "string" && entry.trim()) {
-        return [{ value: entry.trim(), label: entry.trim() }];
-      }
-
-      if (!entry || typeof entry !== "object") {
-        return [];
-      }
-
-      const provider = isNonEmptyString(entry.provider) ? entry.provider.trim() : "custom";
-      const modelName = extractModelNameFromRecord(entry);
-
-      if (!modelName) {
-        return [];
-      }
-
-      return [
-        {
-          value: `${provider}:${modelName}`,
-          label: `${provider} / ${modelName}`,
-        },
-      ];
-    })
-    .filter((option) => isNonEmptyString(option.value));
-}
-
-function extractModelNameFromRecord(record) {
-  if (isNonEmptyString(record.model)) {
-    return record.model.trim();
+async function removeThread(threadId) {
+  if (typeof threadId !== "string" || !threadId) {
+    return;
   }
 
-  if (record.config && typeof record.config === "object" && isNonEmptyString(record.config.model)) {
-    return record.config.model.trim();
+  const beforeLength = state.threads.length;
+  state.threads = state.threads.filter((thread) => thread.id !== threadId);
+
+  if (state.threads.length === beforeLength) {
+    return;
   }
 
-  const endpoint = isNonEmptyString(record.endpoint)
-    ? record.endpoint
-    : record.config && typeof record.config === "object" && isNonEmptyString(record.config.endpoint)
-      ? record.config.endpoint
-      : "";
-
-  return parseModelFromEndpoint(endpoint);
-}
-
-function buildModelOptionsFromPlugins(plugins) {
-  if (!Array.isArray(plugins)) {
-    return [];
+  if (state.activeThreadId === threadId) {
+    state.activeThreadId = state.threads.find((thread) => thread.isOpen)?.id || null;
   }
 
-  return plugins
-    .map((plugin) => {
-      if (!plugin || typeof plugin !== "object") {
-        return null;
-      }
+  render();
 
-      const providerId = isNonEmptyString(plugin.id) ? plugin.id.trim() : "unknown";
-      const modelName = resolvePluginModelName(plugin);
-
-      if (!modelName) {
-        return null;
-      }
-
-      return {
-        value: `${providerId}:${modelName}`,
-        label: `${providerId} / ${modelName}`,
-      };
-    })
-    .filter(Boolean);
-}
-
-function resolvePluginModelName(plugin) {
-  const fields = Array.isArray(plugin.fields) ? plugin.fields : [];
-  const modelField = fields.find((field) => field && field.key === "model");
-
-  if (modelField && isNonEmptyString(modelField.default)) {
-    return modelField.default.trim();
-  }
-
-  const endpointField = fields.find((field) => field && field.key === "endpoint");
-  if (endpointField && isNonEmptyString(endpointField.default)) {
-    return parseModelFromEndpoint(endpointField.default);
-  }
-
-  return null;
-}
-
-function parseModelFromEndpoint(endpoint) {
-  if (!isNonEmptyString(endpoint)) {
-    return "";
-  }
-
-  const cleaned = endpoint.trim();
-  const marker = "/models/";
-  const markerIndex = cleaned.indexOf(marker);
-
-  if (markerIndex !== -1) {
-    const modelPath = cleaned.slice(markerIndex + marker.length).replace(/\/+$/, "");
-    return modelPath || "";
+  if (!state.db) {
+    return;
   }
 
   try {
-    const url = new URL(cleaned);
-    const segments = url.pathname.split("/").filter(Boolean);
-    return segments[segments.length - 1] || "";
-  } catch {
-    const segments = cleaned.split("/").filter(Boolean);
-    return segments[segments.length - 1] || "";
+    await deleteThreadWithMessages(state.db, threadId);
+  } catch (error) {
+    // If DB delete fails, restore thread to state to maintain consistency
+    state.threads = [{ id: threadId }, ...state.threads].sort(
+      (a, b) => Date.parse(b.updatedAt || 0) - Date.parse(a.updatedAt || 0)
+    );
+    render();
   }
 }
 
-function dedupeModelOptions(options) {
-  const map = new Map();
-
-  options.forEach((option) => {
-    if (!option || !isNonEmptyString(option.value)) {
-      return;
-    }
-
-    const key = option.value.trim();
-    if (!map.has(key)) {
-      map.set(key, {
-        value: key,
-        label: isNonEmptyString(option.label) ? option.label.trim() : key,
-      });
-    }
-  });
-
-  return [...map.values()];
-}
-
-function getValidSelectedModel(candidate) {
-  const hasCandidate =
-    isNonEmptyString(candidate) && availableModels.some((option) => option.value === candidate);
-  if (hasCandidate) {
-    return candidate;
+function getThreadById(threadId) {
+  if (typeof threadId !== "string") {
+    return null;
   }
 
-  return availableModels[0]?.value || "";
-}
-
-function getFilteredThreads() {
-  const query = state.query.trim().toLowerCase();
-  if (!query) {
-    return [...state.threads];
-  }
-
-  return state.threads.filter((thread) => {
-    const searchText = [thread.title, thread.selectedModel, getThreadSnippet(thread)]
-      .join(" ")
-      .toLowerCase();
-    return searchText.includes(query);
-  });
-}
-
-function getThreadSnippet(thread) {
-  const lastMessage = thread.messages[thread.messages.length - 1];
-  return lastMessage?.content || READY_MESSAGE;
-}
-
-function findThreadById(threadId) {
   return state.threads.find((thread) => thread.id === threadId) || null;
 }
 
-function getThreadFromEventTarget(target) {
-  if (!target || typeof target.closest !== "function") {
-    return null;
+function persistThread(thread) {
+  if (!state.db || !shouldPersistThread(thread)) {
+    return Promise.resolve();
   }
 
-  const panel = target.closest(".thread-panel");
-  const threadId = panel?.dataset.threadId || target.dataset?.threadId;
-
-  if (!threadId) {
-    return null;
-  }
-
-  return findThreadById(threadId);
-}
-
-function moveThreadToTop(threadId) {
-  const index = state.threads.findIndex((thread) => thread.id === threadId);
-  if (index <= 0) {
-    return;
-  }
-
-  const [thread] = state.threads.splice(index, 1);
-  state.threads.unshift(thread);
-}
-
-function sortThreadsByRecency() {
-  state.threads.sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt));
-}
-
-function buildMessage(role, content, createdAt) {
-  return {
-    id: createId("msg"),
-    role,
-    content,
-    createdAt,
-  };
-}
-
-function buildThreadTitle(messageText) {
-  const clean = messageText.trim();
-  if (clean.length <= 42) {
-    return clean;
-  }
-
-  return `${clean.slice(0, 39)}...`;
-}
-
-function focusComposer(threadId = state.activeThreadId) {
-  window.requestAnimationFrame(() => {
-    const selector = threadId
-      ? `.thread-panel[data-thread-id="${threadId}"] [data-role="composer-input"]`
-      : '[data-role="composer-input"]';
-    const input = elements.threadStage.querySelector(selector);
-    if (!input || input.closest("[hidden]")) {
-      return;
-    }
-
-    input.focus();
+  return upsertThreadWithMessages(state.db, thread).catch((error) => {
+    console.error("Failed to persist thread:", error);
+    throw error;
   });
 }
 
-function createId(prefix) {
-  if (window.crypto && typeof window.crypto.randomUUID === "function") {
-    return `${prefix}-${window.crypto.randomUUID()}`;
+function getStageContext(eventTarget, selector) {
+  const control = getClosestEventTarget(eventTarget, selector);
+  if (!control) {
+    return null;
   }
 
-  return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const panel = control.closest(".thread-panel");
+  if (!panel) {
+    return null;
+  }
+
+  const thread = getThreadById(panel.dataset.threadId);
+  return thread ? { control, thread } : null;
 }
 
-function isValidDate(value) {
-  return typeof value === "string" && !Number.isNaN(Date.parse(value));
+function handleCloseConfig() {
+  if (elements.configDialog) {
+    elements.configDialog.close();
+  }
 }
 
-function isNonEmptyString(value) {
-  return typeof value === "string" && value.trim().length > 0;
+function openThreadConfig(thread) {
+  if (!elements.configDialog || !elements.configIframe) {
+    return;
+  }
+
+  const selectedModel = getValidSelectedModel(thread.selectedModel);
+  const configUrl = `../llm-config-platform/index.html?thread=${encodeURIComponent(
+    thread.id
+  )}&selected=${encodeURIComponent(selectedModel)}`;
+
+  elements.configIframe.src = configUrl;
+
+  if (!elements.configDialog.open) {
+    elements.configDialog.showModal();
+  }
+}
+
+function pickExistingThreadId(candidateId) {
+  if (
+    typeof candidateId === "string" &&
+    candidateId &&
+    state.threads.some((thread) => thread.id === candidateId)
+  ) {
+    return candidateId;
+  }
+
+  return state.threads.find((thread) => thread.isOpen)?.id || null;
+}
+
+function getValidSelectedModel(candidate) {
+  if (!state.availableModels.length) {
+    return "";
+  }
+
+  if (
+    typeof candidate === "string" &&
+    state.availableModels.some((option) => option.value === candidate)
+  ) {
+    return candidate;
+  }
+
+  return state.availableModels[0].value;
 }

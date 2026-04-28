@@ -15,24 +15,16 @@
             <header class="sidebar--threads__header">
                 <div class="sidebar--threads__title-row">
                     <h1 class="sidebar--threads__title">Threads</h1>
-                    <button
-                        type="button"
-                        class="sidebar--threads__new"
-                        aria-label="Start new chat"
-                        data-action="new-thread"
-                    >
+                    <button type="button" class="sidebar--threads__new" aria-label="Start new chat"
+                        data-action="new-thread">
                         +
                     </button>
                 </div>
 
                 <form class="sidebar--threads__search" role="search" data-action="search-threads">
                     <label class="visually-hidden" for="thread-search-input">Search threads</label>
-                    <input
-                        id="thread-search-input"
-                        type="search"
-                        data-role="thread-search-input"
-                        placeholder="Search by title or latest message"
-                    />
+                    <input id="thread-search-input" type="search" data-role="thread-search-input"
+                        placeholder="Search by title or latest message" />
                 </form>
             </header>
 
@@ -55,6 +47,17 @@
         </main>
     </div>
 
+    <dialog class="config-dialog" data-role="config-dialog">
+        <div class="config-dialog__header">
+            <h2 class="config-dialog__title">LLM Config Platform</h2>
+            <button type="button" class="config-dialog__close" aria-label="Close config"
+                data-action="close-config-dialog">
+                ✕
+            </button>
+        </div>
+        <iframe class="config-dialog__iframe" data-role="config-iframe" title="LLM Config Platform"></iframe>
+    </dialog>
+
     <template id="thread">
         <article class="thread-panel" data-state="expanded">
             <header class="thread-panel__header">
@@ -69,9 +72,9 @@
                         <select name="model" data-action="select-model"></select>
                     </label>
 
-                    <a class="thread-panel__link" href="../llm-config-platform/index.html">
-                        Open LLM Config Platform
-                    </a>
+                    <button type="button" class="thread-panel__link" data-action="open-config">
+                        Open Config
+                    </button>
 
                     <button type="button" aria-label="Minimize chat" data-action="minimize-thread">
                         -
@@ -83,12 +86,8 @@
 
             <form class="composer" data-action="send-message">
                 <label class="visually-hidden" data-role="composer-label">Type your message</label>
-                <input
-                    type="text"
-                    placeholder="Type your message here..."
-                    data-role="composer-input"
-                    autocomplete="off"
-                />
+                <input type="text" placeholder="Type your message here..." data-role="composer-input"
+                    autocomplete="off" />
                 <button type="submit">Send</button>
             </form>
         </article>
