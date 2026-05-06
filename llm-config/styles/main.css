@@ -22,9 +22,9 @@ body {
 .model-picker__fieldset {
 	border: 1px solid var(--line);
 	border-radius: 16px;
-	padding: 1rem;
 	background: var(--surface);
 	box-shadow: 0 10px 25px rgba(16, 24, 40, 0.08);
+	margin-bottom: 100px;
 }
 
 .model-picker__legend {
@@ -72,6 +72,7 @@ body {
 	color: #fff;
 	font-weight: 700;
 	cursor: pointer;
+	margin-top: 20px;
 }
 
 .model-picker__preview {

@@ -337,7 +337,7 @@ function openThreadConfig(thread) {
   }
 
   const selectedModel = getValidSelectedModel(thread.selectedModel);
-  const configUrl = `../llm-config-platform/index.html?thread=${encodeURIComponent(
+  const configUrl = `../llm-config/index.html?thread=${encodeURIComponent(
     thread.id
   )}&selected=${encodeURIComponent(selectedModel)}`;
 
