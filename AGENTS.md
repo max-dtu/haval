@@ -5,7 +5,7 @@ This file provides guidance to WARP (warp.dev) when working with code in this re
 ## Development
 
 - Start the dev server: `go run server.go` — serves the repo root on http://localhost:8080.
-- There is no build system, test suite, or linter. All code is vanilla HTML/CSS/JS (ES modules) and a tiny Go static file server.
+- There is no build system or test suite. Stylelint with BEM pattern enforcement is available for CSS linting (`npm run lint:css`). All code is vanilla HTML/CSS/JS (ES modules) and a tiny Go static file server.
 - Open individual modules directly via the Go server, e.g.:
   - http://localhost:8080/threads/
   - http://localhost:8080/llm-config/

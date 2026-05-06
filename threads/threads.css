@@ -1,11 +1,12 @@
 :root {
     color-scheme: light;
+
     --page-bg:
         radial-gradient(circle at 12% 18%, #f9e5cc 0%, transparent 40%),
         radial-gradient(circle at 84% 12%, #d8f0ea 0%, transparent 44%),
         linear-gradient(155deg, #fffaf3 0%, #f3f7f5 100%);
-    --surface: rgba(255, 255, 255, 0.92);
-    --surface-elevated: #ffffff;
+    --surface: rgb(255 255 255 / 92%);
+    --surface-elevated: #fff;
     --surface-accent: #f4fbf8;
     --border: #d7e2dc;
     --text: #173229;
@@ -14,8 +15,8 @@
     --accent-strong: #05624d;
     --bubble-assistant: #eef7f3;
     --bubble-user: #d8efe6;
-    --shadow-soft: 0 12px 28px rgba(8, 38, 30, 0.1);
-    --shadow-hard: 0 16px 30px rgba(8, 38, 30, 0.14);
+    --shadow-soft: 0 12px 28px rgb(8 38 30 / 10%);
+    --shadow-hard: 0 16px 30px rgb(8 38 30 / 14%);
     --radius-lg: 18px;
     --radius-md: 12px;
     --radius-sm: 8px;
@@ -91,7 +92,7 @@ body {
     border: 0;
     border-radius: 999px;
     background: linear-gradient(160deg, var(--accent), #13b18a);
-    color: #ffffff;
+    color: #fff;
     font-size: 1.25rem;
     font-weight: 700;
     cursor: pointer;
@@ -100,7 +101,7 @@ body {
 
 .sidebar--threads__new:hover {
     transform: translateY(-1px);
-    box-shadow: 0 8px 14px rgba(6, 93, 74, 0.28);
+    box-shadow: 0 8px 14px rgb(6 93 74 / 28%);
 }
 
 .sidebar--threads__new:focus-visible {
@@ -169,7 +170,7 @@ body {
 .thread-list__button:hover {
     transform: translateY(-1px);
     border-color: #b8cec2;
-    box-shadow: 0 8px 14px rgba(23, 50, 41, 0.1);
+    box-shadow: 0 8px 14px rgb(23 50 41 / 10%);
 }
 
 .thread-list__button:focus-visible {
@@ -391,7 +392,7 @@ body {
     border-radius: var(--radius-md);
     border: 1px solid var(--border);
     padding: 0.62rem 0.75rem;
-    box-shadow: 0 2px 8px rgba(23, 50, 41, 0.06);
+    box-shadow: 0 2px 8px rgb(23 50 41 / 6%);
 }
 
 .message--assistant {
@@ -450,7 +451,7 @@ body {
     border: 0;
     border-radius: var(--radius-sm);
     background: linear-gradient(160deg, var(--accent), #13b18a);
-    color: #ffffff;
+    color: #fff;
     font: inherit;
     font-weight: 600;
     padding: 0.64rem 0.95rem;
@@ -473,7 +474,7 @@ body {
     border: 0;
 }
 
-@media (max-width: 980px) {
+@media (width <= 980px) {
     .layout {
         grid-template-columns: 1fr;
         grid-template-rows: auto 1fr;
@@ -502,7 +503,7 @@ body {
     }
 }
 
-@media (max-width: 640px) {
+@media (width <= 640px) {
     .layout {
         padding: 0.65rem;
     }
@@ -543,7 +544,7 @@ body {
     padding: 0;
     border: 1px solid #ccc;
     border-radius: 8px;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 4px 16px rgb(0 0 0 / 15%);
     display: none;
     grid-template-rows: auto minmax(0, 1fr);
     box-sizing: border-box;
@@ -555,7 +556,7 @@ body {
 }
 
 .config-dialog::backdrop {
-    background-color: rgba(0, 0, 0, 0.4);
+    background-color: rgb(0 0 0 / 40%);
 }
 
 .config-dialog__header {
@@ -593,7 +594,7 @@ body {
 }
 
 .config-dialog__close:focus {
-    outline: 2px solid #0066cc;
+    outline: 2px solid #06c;
     outline-offset: 2px;
 }
 
@@ -608,7 +609,7 @@ body {
     min-height: 0;
 }
 
-@media (max-width: 640px) {
+@media (width <= 640px) {
     .config-dialog {
         inset: 0.5rem;
         border-radius: 12px;

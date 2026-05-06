@@ -1,0 +1,14 @@
+{
+  "name": "haval",
+  "version": "1.0.0",
+  "description": "Haval — vanilla HTML/CSS/JS modules with a Go static file server",
+  "scripts": {
+    "lint:css": "stylelint '**/*.css'",
+    "lint:css:fix": "stylelint '**/*.css' --fix"
+  },
+  "devDependencies": {
+    "stylelint": "^16.0.0",
+    "stylelint-config-standard": "^36.0.0",
+    "stylelint-selector-bem-pattern": "^4.0.0"
+  }
+}

@@ -1,6 +1,6 @@
 :root {
 	--bg: #f7f8fb;
-	--surface: #ffffff;
+	--surface: #fff;
 	--line: #d9dde7;
 	--ink: #1a1f2b;
 	--accent: #2d6cdf;
@@ -9,7 +9,7 @@
 
 body {
 	margin: 0;
-	background: radial-gradient(circle at 20% 0%, #ffffff, var(--bg));
+	background: radial-gradient(circle at 20% 0%, #fff, var(--bg));
 	color: var(--ink);
 	font-family: "Avenir Next", "Segoe UI", sans-serif;
 }
@@ -23,7 +23,7 @@ body {
 	border: 1px solid var(--line);
 	border-radius: 16px;
 	background: var(--surface);
-	box-shadow: 0 10px 25px rgba(16, 24, 40, 0.08);
+	box-shadow: 0 10px 25px rgb(16 24 40 / 8%);
 	margin-bottom: 100px;
 }
 
@@ -64,7 +64,6 @@ body {
 }
 
 .model-picker button[type="submit"] {
-	margin-top: 0.75rem;
 	border: 0;
 	border-radius: 999px;
 	padding: 0.6rem 1rem;
@@ -97,7 +96,7 @@ body {
 	border: 1px solid var(--line);
 	border-radius: 12px;
 	padding: 0.85rem;
-	font-family: "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+	font-family: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 	font-size: 0.88rem;
 	line-height: 1.45;
 	background: #fbfcff;
@@ -107,7 +106,7 @@ body {
 }
 
 .model-picker__textarea:focus {
-	outline: 2px solid rgba(45, 108, 223, 0.2);
+	outline: 2px solid rgb(45 108 223 / 20%);
 	border-color: var(--accent);
 }
 
@@ -125,7 +124,7 @@ body {
 	color: var(--danger);
 }
 
-@media (max-width: 640px) {
+@media (width <= 640px) {
 	.model-picker {
 		margin: 1rem;
 	}
