@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Minimal Chat UI</title>
+
+ 
+</head>
+
+<body>
+
+  <div class="app">
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+
+      <header class="sidebar__header">
+        <button
+          class="sidebar__new-chat"
+          type="button"
+          data-action="new-chat"
+        >
+          New Chat
+        </button>
+      </header>
+
+      <nav class="sidebar__nav" aria-label="Chat history">
+
+        <ul class="sidebar__list">
+
+          <li class="sidebar__item">
+            <button
+              class="sidebar__button"
+              type="button"
+              data-action="open-chat"
+              data-chat-id="1"
+              data-state="active"
+            >
+              UI Architecture Notes
+            </button>
+          </li>
+
+          <li class="sidebar__item">
+            <button
+              class="sidebar__button"
+              type="button"
+              data-action="open-chat"
+              data-chat-id="2"
+            >
+              CSS Refactor
+            </button>
+          </li>
+
+        </ul>
+
+      </nav>
+
+    </aside>
+
+    <!-- CHAT -->
+    <main class="chat">
+
+      <header class="chat__header">
+        <h1 class="chat__title">
+          Chat
+        </h1>
+      </header>
+
+      <section class="chat__body">
+
+        <div class="chat__messages">
+
+          <!-- ASSISTANT MESSAGE -->
+          <article
+            class="message message--assistant"
+            data-role="assistant"
+          >
+
+            <div class="message__avatar" aria-hidden="true"></div>
+
+            <div class="message__content">
+
+              <div class="message__meta">
+                Assistant
+              </div>
+
+              <div class="message__bubble">
+                Reusable components. Semantic HTML. Minimal styling.
+                Humanity reinventing IRC with rounded corners. Historic achievement.
+              </div>
+
+            </div>
+
+          </article>
+
+          <!-- USER MESSAGE -->
+          <article
+            class="message message--user"
+            data-role="user"
+          >
+
+            <div class="message__avatar" aria-hidden="true"></div>
+
+            <div class="message__content">
+
+              <div class="message__meta">
+                You
+              </div>
+
+              <div class="message__bubble">
+                Build me a ChatGPT-like interface.
+              </div>
+
+            </div>
+
+          </article>
+
+        </div>
+
+      </section>
+
+      <!-- INPUT -->
+      <footer class="composer">
+
+        <div class="composer__container">
+
+          <form
+            class="composer__form"
+            data-state="idle"
+          >
+
+            <label class="u-hidden" for="message">
+              Message
+            </label>
+
+            <textarea
+              id="message"
+              class="composer__textarea"
+              placeholder="Send a message..."
+              rows="1"
+              data-action="input-message"
+            ></textarea>
+
+            <button
+              class="composer__submit"
+              type="submit"
+              data-action="send-message"
+            >
+              ↑
+            </button>
+
+          </form>
+
+        </div>
+
+      </footer>
+
+    </main>
+
+  </div>
+
+</body>
+</html>
