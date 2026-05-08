@@ -30,11 +30,11 @@ A plugin-based config builder that accepts provider settings as JSON, validates 
 
 ### Threads (`threads/`)
 
-A thread-based chat UI with sidebar list, expandable chat panels, and IndexedDB persistence.
+A thread-based chat UI with sidebar list, expandable chat panels, and OPFS persistence.
 
 - **State**: `threads.js` holds `state.db`, `state.threads[]`, `state.activeThreadId`, `state.availableModels`, and `state.searchQuery`.
-- **IndexedDB schema** (`storage.js`): Two object stores — `threads` (keyPath `id`, index on `updatedAt`) and `messages` (keyPath `id`, indexes on `threadId` and `threadIdCreatedAt`).
-- **Migration path**: `storage.js` migrates legacy `localStorage` (`haval.threads.v1`) into IndexedDB on first load if the DB is empty.
+- **OPFS schema** (`storage.js`): Two object stores — `threads` (keyPath `id`, index on `updatedAt`) and `messages` (keyPath `id`, indexes on `threadId` and `threadIdCreatedAt`).
+- **Migration path**: `storage.js` migrates legacy `localStorage` (`haval.threads.v1`) into OPFS on first load if the DB is empty.
 - **Sanitization**: `threadHelpers.js` (`createThreadSanitizer`) normalizes loaded threads — validates `id`, `createdAt`, `updatedAt`, `selectedModel`, `messages[]`, and `isOpen`. Invalid threads are dropped.
 - **Persistence rule**: A thread is only persisted if it has at least one message (`shouldPersistThread`). Empty threads are pruned on hydration.
 - **Rendering**: `view.js` is pure DOM rendering with no state mutation. `renderThreadList` and `renderThreadPanels` are called after every state change.
@@ -54,7 +54,7 @@ An educational browser module that trains a tiny char-level LSTM with TensorFlow
 A chat interface where users can interact with WebLLM models directly in the browser.
 
 - **WebLLM integration**: Loads and runs models entirely client-side using WebLLM (via `@mlc-ai/web-llm`).
-- **Browser storage**: Conversations are persisted using Web SQLite (sqlite3 WASM or origin-private file system).
+- **Browser storage**: Conversations are persisted using Web SQLite (sqlite3 WASM & origin-private file system).
 - **Module entry**: `lang-lab/index.html`
 
 ## Code Conventions (from `principles.md`)

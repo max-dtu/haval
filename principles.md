@@ -1,5 +1,9 @@
 # Principles:
 
+## Tech stack 
+Use SQLite compiled to WebAssembly for the database engine and persist all conversation data in the browser using the Origin-Private File System (OPFS) as the storage backend.
+
+
 ## Core Principles
 Simplicity over complexity
 Readability over brevity
