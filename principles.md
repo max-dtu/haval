@@ -37,4 +37,4 @@ Modular code (split into functions/modules).
 Avoid global scope pollution.
 keep it minimal.
 
-Keep core logic independent of the view layer. Backend handles APIs, business logic, DB, auth & services. Frontend handles UI, state & interactions. No UI in backend, no DB access in frontend. Communicate via typed APIs/contracts. Keep layers isolated, testable & deployable.
+Do not mix frontend code with backend code.
