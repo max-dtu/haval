@@ -1,164 +1,241 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Minimal Chat UI</title>
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>WebLLM Chat</title>
+		<style>
+			* {
+				margin: 0;
+				padding: 0;
+				box-sizing: border-box;
+			}
 
- 
-</head>
+			body {
+				font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+				background: #f5f5f5;
+				height: 100vh;
+				display: flex;
+				flex-direction: column;
+			}
 
-<body>
+			.header {
+				background: white;
+				border-bottom: 1px solid #e5e5e5;
+				padding: 1rem;
+				display: flex;
+				gap: 1rem;
+				align-items: center;
+				flex-wrap: wrap;
+			}
 
-  <div class="app">
+			.header h1 {
+				font-size: 1.25rem;
+				flex: 1;
+			}
 
-    <!-- SIDEBAR -->
-    <aside class="sidebar">
+			.model-section {
+				display: flex;
+				gap: 0.5rem;
+				align-items: center;
+			}
 
-      <header class="sidebar__header">
-        <button
-          class="sidebar__new-chat"
-          type="button"
-          data-action="new-chat"
-        >
-          New Chat
-        </button>
-      </header>
+			select {
+				padding: 0.5rem;
+				border: 1px solid #d5d5d5;
+				border-radius: 4px;
+				font-size: 1rem;
+				background: white;
+			}
 
-      <nav class="sidebar__nav" aria-label="Chat history">
+			button {
+				padding: 0.5rem 1rem;
+				background: #007acc;
+				color: white;
+				border: none;
+				border-radius: 4px;
+				cursor: pointer;
+				font-size: 1rem;
+				transition: background 0.2s;
+			}
 
-        <ul class="sidebar__list">
+			button:hover:not(:disabled) {
+				background: #005a9e;
+			}
 
-          <li class="sidebar__item">
-            <button
-              class="sidebar__button"
-              type="button"
-              data-action="open-chat"
-              data-chat-id="1"
-              data-state="active"
-            >
-              UI Architecture Notes
-            </button>
-          </li>
+			button:disabled {
+				background: #ccc;
+				cursor: not-allowed;
+			}
 
-          <li class="sidebar__item">
-            <button
-              class="sidebar__button"
-              type="button"
-              data-action="open-chat"
-              data-chat-id="2"
-            >
-              CSS Refactor
-            </button>
-          </li>
+			.status {
+				font-size: 0.9rem;
+				color: #666;
+				padding: 0.5rem 1rem;
+				background: #f9f9f9;
+				border-radius: 4px;
+				min-width: 200px;
+			}
 
-        </ul>
+			.chat {
+				flex: 1;
+				display: flex;
+				flex-direction: column;
+				overflow: hidden;
+			}
 
-      </nav>
+			.messages {
+				flex: 1;
+				overflow-y: auto;
+				padding: 1rem;
+				display: flex;
+				flex-direction: column;
+				gap: 0.75rem;
+			}
 
-    </aside>
+			.message {
+				display: flex;
+				gap: 0.75rem;
+				animation: fadeIn 0.2s ease-in;
+			}
 
-    <!-- CHAT -->
-    <main class="chat">
+			@keyframes fadeIn {
+				from {
+					opacity: 0;
+					transform: translateY(8px);
+				}
+				to {
+					opacity: 1;
+					transform: translateY(0);
+				}
+			}
 
-      <header class="chat__header">
-        <h1 class="chat__title">
-          Chat
-        </h1>
-      </header>
+			.message.user {
+				justify-content: flex-end;
+			}
 
-      <section class="chat__body">
+			.message-bubble {
+				max-width: 70%;
+				padding: 0.75rem 1rem;
+				border-radius: 8px;
+				word-wrap: break-word;
+				white-space: pre-wrap;
+				line-height: 1.5;
+			}
 
-        <div class="chat__messages">
+			.message.assistant .message-bubble {
+				background: #e8e8e8;
+				color: #333;
+			}
 
-          <!-- ASSISTANT MESSAGE -->
-          <article
-            class="message message--assistant"
-            data-role="assistant"
-          >
+			.message.user .message-bubble {
+				background: #007acc;
+				color: white;
+			}
 
-            <div class="message__avatar" aria-hidden="true"></div>
+			.composer {
+				display: flex;
+				gap: 0.5rem;
+				padding: 1rem;
+				background: white;
+				border-top: 1px solid #e5e5e5;
+			}
 
-            <div class="message__content">
+			textarea {
+				flex: 1;
+				padding: 0.75rem;
+				border: 1px solid #d5d5d5;
+				border-radius: 4px;
+				font-family: inherit;
+				font-size: 1rem;
+				resize: none;
+				max-height: 100px;
+			}
 
-              <div class="message__meta">
-                Assistant
-              </div>
+			textarea:focus {
+				outline: none;
+				border-color: #007acc;
+			}
 
-              <div class="message__bubble">
-                Reusable components. Semantic HTML. Minimal styling.
-                Humanity reinventing IRC with rounded corners. Historic achievement.
-              </div>
+			.loading {
+				text-align: center;
+				padding: 2rem;
+				color: #666;
+			}
 
-            </div>
+			.progress-bar {
+				width: 100%;
+				height: 3px;
+				background: #e5e5e5;
+				margin-top: 0.5rem;
+				border-radius: 2px;
+				overflow: hidden;
+			}
 
-          </article>
+			.progress-fill {
+				height: 100%;
+				background: #007acc;
+				transition: width 0.3s ease;
+			}
 
-          <!-- USER MESSAGE -->
-          <article
-            class="message message--user"
-            data-role="user"
-          >
+			.error {
+				background: #fee;
+				color: #c33;
+				padding: 0.75rem;
+				border-radius: 4px;
+				margin: 0.5rem;
+				display: none;
+			}
 
-            <div class="message__avatar" aria-hidden="true"></div>
+			.error.show {
+				display: block;
+			}
 
-            <div class="message__content">
+			.empty {
+				flex: 1;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				color: #999;
+				font-size: 1.1rem;
+			}
+		</style>
+		<script type="module" src="./chat.js" defer></script>
+	</head>
+	<body>
+		<header class="header">
+			<h1>Chat</h1>
+			<div class="model-section">
+				<select data-action="model-select">
+					<option value="Llama-3-8B-Instruct-q4f32_1">Llama 3 8B (default)</option>
+					<option value="Mistral-7B-Instruct-v0.1-q4f32_1">Mistral 7B</option>
+					<option value="NeuralHermes-2.5-Mistral-7B-q4f32_1">NeuralHermes 2.5</option>
+					<option value="OpenHermes-2-Mistral-7B-q4f32_1">OpenHermes 2</option>
+					<option value="phi-2-q4f32_1">Phi 2</option>
+				</select>
+				<button data-action="load-model">Load Model</button>
+				<div class="status" data-role="status">Ready</div>
+				<div data-role="progress" style="display: none; width: 200px">
+					<div data-role="progress-text" style="font-size: 0.85rem; color: #666"></div>
+					<div class="progress-bar">
+						<div class="progress-fill" data-role="progress-fill"></div>
+					</div>
+				</div>
+			</div>
+		</header>
 
-              <div class="message__meta">
-                You
-              </div>
+		<div class="error" data-role="error"></div>
 
-              <div class="message__bubble">
-                Build me a ChatGPT-like interface.
-              </div>
+		<div data-role="loading-screen" class="loading" style="display: none">
+			<p>Select a model and click "Load Model" to start chatting.</p>
+		</div>
 
-            </div>
-
-          </article>
-
-        </div>
-
-      </section>
-
-      <!-- INPUT -->
-      <footer class="composer">
-
-        <div class="composer__container">
-
-          <form
-            class="composer__form"
-            data-state="idle"
-          >
-
-            <label class="u-hidden" for="message">
-              Message
-            </label>
-
-            <textarea
-              id="message"
-              class="composer__textarea"
-              placeholder="Send a message..."
-              rows="1"
-              data-action="input-message"
-            ></textarea>
-
-            <button
-              class="composer__submit"
-              type="submit"
-              data-action="send-message"
-            >
-              ↑
-            </button>
-
-          </form>
-
-        </div>
-
-      </footer>
-
-    </main>
-
-  </div>
-
-</body>
+		<div class="chat" data-role="chat" style="display: none">
+			<div class="messages" data-role="messages"></div>
+			<form class="composer" data-action="send-message">
+				<textarea data-action="input" placeholder="Type a message..." rows="1"></textarea>
+				<button type="submit">Send</button>
+			</form>
+		</div>
+	</body>
 </html>
